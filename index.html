@@ -2,7 +2,6 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"/>
-  <link rel="icon" type="image/png" href="LogoV1 (8).png"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title id="page-title">Rafa Silva — Controle Financeiro</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -163,6 +162,12 @@
   .chart-mode-btn{padding:4px 12px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid rgba(139,0,255,0.2);background:transparent;color:#666;cursor:pointer;transition:.15s;letter-spacing:0.3px;font-family:'Inter',system-ui,sans-serif;}
   .chart-mode-btn:hover{color:#fff;border-color:rgba(139,0,255,0.5);}
   .chart-mode-btn.active{background:rgba(139,0,255,0.15);color:#fff;border-color:var(--accent);}
+  .status-pgto-btn{border:1px solid rgba(255,255,255,0.1);background:transparent;color:#666;transition:.15s;}
+  .status-pgto-btn.active[data-status="Recebido"]{background:rgba(0,200,100,0.15);border-color:#00C864;color:#00C864;}
+  .status-pgto-btn.active[data-status="Pendente"]{background:rgba(255,184,0,0.15);border-color:#FFB800;color:#FFB800;}
+  .chip-select{padding:4px 12px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#666;font-size:12px;cursor:pointer;transition:.15s;margin:3px;}
+  .chip-select.active{background:rgba(139,0,255,0.15);border-color:var(--accent);color:#fff;}
+  tr.pendente td{opacity:0.65;}
   .table-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:20px;}
   .table-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
   .table-scroll{overflow-x:auto;position:relative;}
@@ -298,6 +303,7 @@
     <div class="nav-item" data-page="entradas"><span class="icon">💜</span> Entradas</div>
     <div class="nav-item" data-page="contratos"><span class="icon">📋</span> Contratos</div>
     <div class="nav-item" data-page="clientes"><span class="icon">👥</span> Clientes</div>
+    <div class="nav-item" data-page="fornecedores"><span class="icon">🤝</span> Fornecedores</div>
     <div class="nav-section">Financeiro</div>
     <div class="nav-item" data-page="saidas"><span class="icon">📤</span> Saídas</div>
     <div class="nav-item" data-page="meta"><span class="icon">🎯</span> Meta Renda Fixa</div>
@@ -348,7 +354,7 @@
           <div class="chart-wrap"><canvas id="chart-bar"></canvas></div>
         </div>
         <div class="chart-card">
-          <div class="chart-title">Composição do ano</div>
+          <div class="chart-title" id="donut-titulo">Composição do ano</div>
           <div class="chart-wrap"><canvas id="chart-doughnut"></canvas></div>
         </div>
       </div>
@@ -376,7 +382,7 @@
         </div>
       </div>
       <div class="table-card"><div class="table-scroll">
-        <table><thead><tr><th>Mês</th><th>Data</th><th>Cliente / Descrição</th><th>Categoria</th><th>Valor</th><th>Ações</th></tr></thead>
+        <table><thead><tr><th>Mês</th><th>Data</th><th>Status</th><th>Cliente / Descrição</th><th>Categoria</th><th>Valor</th><th>Ações</th></tr></thead>
         <tbody id="tb-entradas"></tbody></table>
       </div></div>
     </div>
@@ -407,14 +413,12 @@
           <select class="form-control" style="width:auto;padding:6px 12px;font-size:13px" id="filter-mes-saida" onchange="renderSaidas()">
             <option value="">Todos os meses</option>
           </select>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('custo-projeto')">+ Custo de projeto</button>
           <button class="btn btn-primary btn-sm" onclick="openModal('saida')">+ Nova saída</button>
         </div>
       </div>
       <div class="saidas-grid" id="saidas-cats"></div>
-      <div class="table-card"><div class="table-scroll">
-        <table><thead><tr><th>Mês</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Tipo</th><th>Ações</th></tr></thead>
-        <tbody id="tb-saidas"></tbody></table>
-      </div></div>
+      <div id="saidas-tabelas"></div>
     </div>
 
     <!-- META -->
@@ -451,11 +455,40 @@
       <div class="table-card"><div class="table-scroll">
         <table>
           <thead><tr>
-            <th>Cliente</th><th>Serviço</th><th>Status</th>
+            <th>Cliente</th><th>Tipo</th><th>Serviços</th><th>Status</th>
             <th>Atual/mês</th><th>Meta/mês</th><th>Progresso</th>
             <th>Observação</th><th>Ações</th>
           </tr></thead>
           <tbody id="tb-clientes"></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- FORNECEDORES -->
+    <div class="page" id="page-fornecedores">
+      <div class="section-header">
+        <div class="section-title">Fornecedores</div>
+        <button class="btn btn-primary btn-sm" onclick="openModal('fornecedor')">+ Novo fornecedor</button>
+      </div>
+
+      <div class="cards-grid" id="fornecedores-summary-cards"></div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px" id="fornecedores-filtro">
+        <button class="btn btn-ghost btn-sm forn-filter-btn active" data-esp="">Todos</button>
+      </div>
+
+      <div class="table-card"><div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>Nome</th>
+            <th>Especialidade</th>
+            <th>Contato</th>
+            <th>Total Pago</th>
+            <th>Projetos</th>
+            <th>Observação</th>
+            <th>Ações</th>
+          </tr></thead>
+          <tbody id="tb-fornecedores"></tbody>
         </table>
       </div></div>
     </div>
@@ -537,6 +570,16 @@
         </div>
       </div>
 
+      <!-- Tipos de Fornecedor -->
+      <div class="config-section">
+        <div class="config-section-title">🤝 Tipos de Fornecedor</div>
+        <div id="tipos-forn-list"></div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <input class="config-input" id="novo-tipo-forn" type="text" placeholder="Ex: Colorista, DJ, Cerimonialista..." style="flex:1"/>
+          <button class="btn btn-primary btn-sm" onclick="adicionarTipoFornecedor()">+ Adicionar</button>
+        </div>
+      </div>
+
       <!-- Categorias de Saída -->
       <div class="config-section">
         <div class="config-section-title">📤 Categorias de Saída</div>
@@ -544,6 +587,26 @@
         <div style="display:flex;gap:8px;margin-top:12px">
           <input class="config-input" id="nova-cat-saida" type="text" placeholder="Nova categoria..." style="flex:1"/>
           <button class="btn btn-primary btn-sm" onclick="adicionarCatSaida()">+ Adicionar</button>
+        </div>
+      </div>
+
+      <!-- Tipos de Cliente -->
+      <div class="config-section">
+        <div class="config-section-title">👥 Tipos de Cliente</div>
+        <div id="tipos-cliente-list"></div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <input class="config-input" id="novo-tipo-cliente" type="text" placeholder="Ex: Recorrente, Sazonal..." style="flex:1"/>
+          <button class="btn btn-primary btn-sm" onclick="adicionarTipoCliente()">+ Adicionar</button>
+        </div>
+      </div>
+
+      <!-- Serviços Prestados -->
+      <div class="config-section">
+        <div class="config-section-title">🛠 Serviços Prestados</div>
+        <div id="servicos-prestados-list"></div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <input class="config-input" id="novo-servico-prestado" type="text" placeholder="Ex: Drone, Motion Design..." style="flex:1"/>
+          <button class="btn btn-primary btn-sm" onclick="adicionarServicoPrestado()">+ Adicionar</button>
         </div>
       </div>
 
@@ -734,13 +797,26 @@ const SAIDAS_SEED = [
 ];
 
 const CLIENTES_SEED = [
-  {id:1,  nome:"DIDIER",            servico:"Cliente Fixo",   status:"Ativo",     atual:450,  meta:700,  obs:"Cliente de longa data"},
-  {id:2,  nome:"POINT DO AÇAÍ",     servico:"Cliente Fixo",   status:"Ativo",     atual:380,  meta:700,  obs:""},
-  {id:3,  nome:"IDEALTEC",          servico:"Cliente Fixo",   status:"Ativo",     atual:800,  meta:1200, obs:"Inclui Idealtabacaria"},
-  {id:4,  nome:"STAFF",             servico:"Cliente Fixo",   status:"Ativo",     atual:300,  meta:700,  obs:"Tráfego pago CFTV"},
-  {id:5,  nome:"CASA AVELINO",      servico:"Cliente Fixo",   status:"Inativo",   atual:0,    meta:450,  obs:"Pausou o serviço"},
-  {id:6,  nome:"CHEIA DE CHARME",   servico:"Cliente Fixo",   status:"Inativo",   atual:0,    meta:1600, obs:"Ficou apenas 1 mês"},
-  {id:7,  nome:"FARMÁCIA PESQUEIRA",servico:"Projeto Avulso", status:"Potencial", atual:0,    meta:800,  obs:"Vídeo de inauguração previsto"},
+  {id:1,  nome:"DIDIER",            tipos:["Fixo"],      servicos:["Produção de Conteúdo"], status:"Ativo",     atual:450,  liquido:0, meta:700,  obs:"Cliente de longa data"},
+  {id:2,  nome:"POINT DO AÇAÍ",     tipos:["Fixo"],      servicos:["Produção de Conteúdo"], status:"Ativo",     atual:380,  liquido:0, meta:700,  obs:""},
+  {id:3,  nome:"IDEALTEC",          tipos:["Fixo"],      servicos:["Produção de Conteúdo"], status:"Ativo",     atual:800,  liquido:0, meta:1200, obs:"Inclui Idealtabacaria"},
+  {id:4,  nome:"STAFF",             tipos:["Fixo"],      servicos:["Tráfego Pago"],         status:"Ativo",     atual:300,  liquido:0, meta:700,  obs:"Tráfego pago CFTV"},
+  {id:5,  nome:"CASA AVELINO",      tipos:["Fixo"],      servicos:["Produção de Conteúdo"], status:"Inativo",   atual:0,    liquido:0, meta:450,  obs:"Pausou o serviço"},
+  {id:6,  nome:"CHEIA DE CHARME",   tipos:["Fixo"],      servicos:["Produção de Conteúdo"], status:"Inativo",   atual:0,    liquido:0, meta:1600, obs:"Ficou apenas 1 mês"},
+  {id:7,  nome:"FARMÁCIA PESQUEIRA",tipos:["Potencial"], servicos:["Projeto Audiovisual"],  status:"Potencial", atual:0,    liquido:0, meta:800,  obs:"Vídeo de inauguração previsto"},
+];
+
+const FORNECEDORES_SEED = [
+  {id:1, nome:"A DEFINIR", especialidades:["Gestor de Tráfego"],      contato:"", obs:""},
+  {id:2, nome:"A DEFINIR", especialidades:["Fotógrafo"],              contato:"", obs:""},
+  {id:3, nome:"A DEFINIR", especialidades:["Videomaker"],             contato:"", obs:""},
+  {id:4, nome:"A DEFINIR", especialidades:["Editor de Vídeo"],        contato:"", obs:""},
+  {id:5, nome:"A DEFINIR", especialidades:["Editor de Foto"],         contato:"", obs:""},
+  {id:6, nome:"A DEFINIR", especialidades:["Drone"],                  contato:"", obs:""},
+  {id:7, nome:"A DEFINIR", especialidades:["Locução"],                contato:"", obs:""},
+  {id:8, nome:"A DEFINIR", especialidades:["Intérprete de Libras"],   contato:"", obs:""},
+  {id:9, nome:"A DEFINIR", especialidades:["Motion Designer"],        contato:"", obs:""},
+  {id:10,nome:"A DEFINIR", especialidades:["Assistente"],             contato:"", obs:""},
 ];
 
 // ═══════════════════════════════════════════
@@ -755,6 +831,22 @@ const CORES_ENTRADA_DEFAULT = {
   "Venda Equipamento": "#FFB800",
 };
 
+// ═══════════════════════════════════════════
+// CORES POR TIPO DE FORNECEDOR
+// ═══════════════════════════════════════════
+const CORES_FORNECEDOR_DEFAULT = {
+  "Gestor de Tráfego":    "#00AAFF",
+  "Fotógrafo":            "#CC00FF",
+  "Videomaker":           "#8B00FF",
+  "Editor de Vídeo":      "#6600CC",
+  "Editor de Foto":       "#9933FF",
+  "Drone":                "#00C864",
+  "Locução":              "#FFB800",
+  "Intérprete de Libras": "#FF6B00",
+  "Motion Designer":      "#FF4466",
+  "Assistente":           "#555555"
+};
+
 const CONFIG_SEED = {
   nome: "RAFA SILVA",
   sub: "Criador Visual",
@@ -767,6 +859,10 @@ const CONFIG_SEED = {
   catsSaida: ["Moradia","Comunicação","Softwares","Dívidas","Operacional","Impostos","Equipe","Outros"],
   meses: ["JAN/26","FEV/26","MAR/26","ABR/26","MAI/26","JUN/26","JUL/26"],
   coresEntrada: Object.assign({},CORES_ENTRADA_DEFAULT),
+  tiposFornecedor: ["Gestor de Tráfego","Fotógrafo","Videomaker","Editor de Vídeo","Editor de Foto","Drone","Locução","Intérprete de Libras","Motion Designer","Assistente"],
+  coresFornecedor: Object.assign({},CORES_FORNECEDOR_DEFAULT),
+  tiposCliente: ["Fixo","Avulso","Contrato","Potencial"],
+  servicosPrestados: ["Produção de Conteúdo","Tráfego Pago","Cobertura Fotográfica","Cobertura em Vídeo","Projeto Audiovisual","Edição de Vídeo","Edição de Foto","Gestão de Redes Sociais"],
 };
 
 // ═══════════════════════════════════════════
@@ -784,11 +880,12 @@ async function sv(chave, dados) {
   // Salva no Firebase
   if (window.__db) {
     const caminhos = {
-      'rs2_entradas':  'entradas',
-      'rs2_contratos': 'contratos',
-      'rs2_saidas':    'saidas',
-      'rs2_clientes':  'clientes',
-      'rs2_config':    'config'
+      'rs2_entradas':     'entradas',
+      'rs2_contratos':    'contratos',
+      'rs2_saidas':       'saidas',
+      'rs2_clientes':     'clientes',
+      'rs2_fornecedores': 'fornecedores',
+      'rs2_config':       'config'
     };
     const caminho = caminhos[chave];
     if (caminho) {
@@ -813,7 +910,7 @@ function ld(chave, padrao) {
   }
 }
 
-let entradas, contratos, saidas, clientes, cfg, nextId;
+let entradas, contratos, saidas, clientes, fornecedores, cfg, nextId;
 
 // ═══════════════════════════════════════════
 // MIGRAÇÃO DE DADOS ANTIGOS (nomes de categoria)
@@ -834,6 +931,37 @@ function migrarDadosAntigos(){
   if(mudou){
     sv('rs2_config',cfg);sv('rs2_entradas',entradas);sv('rs2_clientes',clientes);
   }
+
+  // Migrar especialidade → especialidades nos fornecedores
+  let mudouForn=false;
+  fornecedores.forEach(f=>{
+    if(f.especialidade && !f.especialidades){
+      f.especialidades=[f.especialidade];
+      delete f.especialidade;
+      mudouForn=true;
+    }
+  });
+  if(mudouForn) sv('rs2_fornecedores', fornecedores);
+
+  // Migrar servico → servicos e adicionar tipos/liquido nos clientes
+  let mudouCli=false;
+  clientes.forEach(c=>{
+    if(c.servico && !c.servicos){
+      c.servicos=[c.servico];
+      delete c.servico;
+      mudouCli=true;
+    }
+    if(!c.tipos){ c.tipos=[]; mudouCli=true; }
+    if(!c.liquido){ c.liquido=0; mudouCli=true; }
+  });
+  if(mudouCli) sv('rs2_clientes', clientes);
+
+  // Migrar entradas sem status_pgto
+  let mudouEnt=false;
+  entradas.forEach(e=>{
+    if(!e.status_pgto){ e.status_pgto='Recebido'; mudouEnt=true; }
+  });
+  if(mudouEnt) sv('rs2_entradas', entradas);
 }
 
 // ═══════════════════════════════════════════
@@ -845,6 +973,11 @@ const sumBy = (arr,key,f={}) => arr.filter(e=>Object.entries(f).every(([k,v])=>e
 function catBadge(cat){
   const cor = (cfg.coresEntrada && cfg.coresEntrada[cat]) || '#8B00FF';
   return `<span class="badge" style="background:${cor}22;color:${cor};border:1px solid ${cor}44">${cat}</span>`;
+}
+
+function fornecedorBadge(tipo){
+  const cor = (cfg.coresFornecedor && cfg.coresFornecedor[tipo]) || '#555';
+  return `<span class="badge" style="background:${cor}22;color:${cor};border:1px solid ${cor}44">${tipo}</span>`;
 }
 
 function fmtData(data){
@@ -859,13 +992,16 @@ function getMesesAtivos(){
 }
 
 function calcMes(mes){
-  const it = entradas.filter(e=>e.mes===mes);
+  const todasDoMes = entradas.filter(e=>e.mes===mes);
+  const it = todasDoMes.filter(e=>!e.status_pgto || e.status_pgto==='Recebido');
+  const pendentes = todasDoMes.filter(e=>e.status_pgto==='Pendente');
   const total = it.reduce((s,e)=>s+e.val,0);
+  const totalPrevisto = pendentes.reduce((s,e)=>s+e.val,0);
   const porCat = {};
   cfg.catsEntrada.forEach(cat=>{ porCat[cat] = sumBy(it,'val',{cat}); });
   it.forEach(e=>{ if(!(e.cat in porCat)) porCat[e.cat] = (porCat[e.cat]||0) + e.val; });
   return {
-    mes, total, porCat,
+    mes, total, totalPrevisto, porCat,
     fixa: porCat['Cliente Fixo'] || 0,
     fotop: porCat['FOTOP/Esportivo'] || 0,
     evento: porCat['Evento Social'] || 0,
@@ -1120,6 +1256,7 @@ function renderDashboard(){
   ].join('');
 
   const totalAcum = todos.reduce((s,m)=>s+m.total,0);
+  const totalPrevistoAcum = todos.reduce((s,m)=>s+(m.totalPrevisto||0),0);
   const fixaAcum  = todos.reduce((s,m)=>s+m.fixa,0);
   const fotopAcum = todos.reduce((s,m)=>s+m.fotop,0);
   const evAcum    = todos.reduce((s,m)=>s+m.evento,0);
@@ -1129,6 +1266,11 @@ function renderDashboard(){
   const emAberto  = contratos.filter(c=>c.status==='Em aberto').reduce((s,c)=>s+c.valor,0);
   const totalSaidas = dashboardPeriod ? sumBy(saidas,'val',{mes:dashboardPeriod}) : saidas.reduce((s,x)=>s+x.val,0);
   const pct = Math.min(Math.round(mediaFixa/META*100),100);
+
+  const saidasProjeto = saidas.filter(s=>s.tipo_saida==='projeto');
+  const totalCustoProjeto = dashboardPeriod ? sumBy(saidasProjeto,'val',{mes:dashboardPeriod}) : saidasProjeto.reduce((s,x)=>s+x.val,0);
+  const margemReal = totalAcum - totalCustoProjeto;
+  const pctMargem  = totalAcum>0 ? Math.round(margemReal/totalAcum*100) : 0;
 
   document.getElementById('sm-meta-val').textContent = `${R(mediaFixa)} / ${R(META)}`;
   document.getElementById('sm-meta-fill').style.width = pct+'%';
@@ -1164,6 +1306,19 @@ function renderDashboard(){
       <div class="card-label">Saídas registradas</div>
       <div class="card-value">${R(totalSaidas)}</div>
     </div>
+    <div class="card" style="animation-delay:300ms">
+      <div class="card-dot"></div>
+      <div class="card-label">Margem Real</div>
+      <div class="card-value">${R(margemReal)}</div>
+      <div class="card-sub">após custos de equipe</div>
+      <div class="card-trend ${pctMargem>=70?'up':'down'}">${pctMargem}% do faturamento bruto</div>
+    </div>
+    <div class="card yellow" style="animation-delay:360ms">
+      <div class="card-dot"></div>
+      <div class="card-label">Previsto a Receber</div>
+      <div class="card-value">${R(totalPrevistoAcum)}</div>
+      <div class="card-sub">entradas pendentes no período</div>
+    </div>
   `;
 
   const cor = cfg.cor||'#8B00FF';
@@ -1188,18 +1343,17 @@ function renderDashboard(){
       ctx.restore();
     }
   };
+  const coresCat = cfg.catsEntrada.map(cat => (cfg.coresEntrada && cfg.coresEntrada[cat]) || '#555');
+  const dataCat  = cfg.catsEntrada.map(cat => todos.reduce((s,m)=>s+(m.porCat[cat]||0),0));
   doughnutChart = new Chart(ctx2,{
     type:'doughnut',
-    data:{labels:['Cliente Fixo','FOTOP','Eventos','Variável','Familiar'],datasets:[{data:[fixaAcum,fotopAcum,evAcum,varAcum,sabAcum],backgroundColor:[
-      (cfg.coresEntrada&&cfg.coresEntrada['Cliente Fixo'])||cor,
-      (cfg.coresEntrada&&cfg.coresEntrada['FOTOP/Esportivo'])||aLight,
-      (cfg.coresEntrada&&cfg.coresEntrada['Evento Social'])||'#00C864',
-      (cfg.coresEntrada&&cfg.coresEntrada['Variável Avulso'])||'#FFB800',
-      (cfg.coresEntrada&&cfg.coresEntrada['Renda Familiar'])||'#555'
-    ],borderWidth:0,hoverOffset:6}]},
+    data:{labels:cfg.catsEntrada,datasets:[{data:dataCat,backgroundColor:coresCat,borderWidth:0,hoverOffset:6}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'72%',plugins:{legend:{position:'bottom',labels:{color:'#999',font:{size:11},padding:10}},tooltip:{callbacks:{label:c=>` ${c.label}: ${R(c.raw)}`}}}},
     plugins:[centerTextPlugin]
   });
+
+  const tituloDonut = !dashboardPeriod ? 'Composição do ano' : `Composição de ${dashboardPeriod}`;
+  document.getElementById('donut-titulo').textContent = tituloDonut;
 
   const recent=[...entradas].reverse().slice(0,10);
   document.getElementById('tb-ultimos').innerHTML = recent.map(e=>`
@@ -1224,16 +1378,74 @@ function renderEntradas(){
   document.getElementById('search-entradas-clear').classList.toggle('show',q.length>0);
   let data=fil?entradas.filter(e=>e.mes===fil):[...entradas].reverse();
   if(q) data=data.filter(e=>e.cliente.toLowerCase().includes(q)||e.cat.toLowerCase().includes(q));
-  document.getElementById('tb-entradas').innerHTML=data.map(e=>`
-    <tr><td><span class="badge badge-gray">${e.mes}</span></td>
+  document.getElementById('tb-entradas').innerHTML=data.map(e=>{
+    const pendente = e.status_pgto==='Pendente';
+    return `
+    <tr class="${pendente?'pendente':''}"><td><span class="badge badge-gray">${e.mes}</span></td>
     <td style="color:var(--text3);font-size:12px">${fmtData(e.data)}</td>
+    <td>${pendente?'<span class="badge badge-yellow">⏳ Pendente</span>':'<span class="badge badge-green">✓ Recebido</span>'}</td>
     <td style="font-weight:600">${e.cliente}</td>
     <td>${catBadge(e.cat)}</td>
     <td class="money">${R(e.val)}</td>
-    <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="editEntrada(${e.id})">✎</button><button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delEntrada(${e.id}))">✕</button></div></td></tr>`).join('')
-    ||(q?`<tr><td colspan="6"><div class="empty"><div class="empty-icon">🔍</div>Nenhum resultado para "${searchEl.value}"</div></td></tr>`:'<tr><td colspan="6"><div class="empty"><div class="empty-icon">📭</div>Nenhum lançamento</div></td></tr>');
+    <td><div class="row-actions">${pendente?`<button class="btn btn-success btn-sm" onclick="marcarRecebido(${e.id})">✓ Marcar recebido</button>`:''}<button class="btn btn-ghost btn-sm" onclick="editEntrada(${e.id})">✎</button><button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delEntrada(${e.id}))">✕</button></div></td></tr>`;
+  }).join('')
+    ||(q?`<tr><td colspan="7"><div class="empty"><div class="empty-icon">🔍</div>Nenhum resultado para "${searchEl.value}"</div></td></tr>`:'<tr><td colspan="7"><div class="empty"><div class="empty-icon">📭</div>Nenhum lançamento</div></td></tr>');
 }
 function delEntrada(id){entradas=entradas.filter(e=>e.id!==id);sv('rs2_entradas',entradas);renderAll();showToast('Removido.','info');}
+
+function marcarRecebido(id){
+  const e = entradas.find(x=>x.id===id);
+  if(!e) return;
+  e.status_pgto = 'Recebido';
+  if(!e.data) e.data = new Date().toISOString().split('T')[0];
+  sv('rs2_entradas', entradas);
+  renderAll();
+  if(typeof showToast==='function') showToast(`✓ ${e.cliente} marcado como recebido!`);
+}
+
+function wireClienteAutocomplete(scopeEl){
+  const input = scopeEl.querySelector('#f-cli');
+  const box = scopeEl.querySelector('#cli-suggestions');
+  if(!input||!box) return;
+  input.addEventListener('input', function(){
+    const q = this.value.trim().toUpperCase();
+    const sugs = clientes.filter(c=>c.nome.includes(q)).slice(0,6);
+    if(!q || sugs.length===0){ box.style.display='none'; return; }
+    box.style.display='block';
+    box.innerHTML = sugs.map(c=>`
+      <div onclick="selecionarClienteEntrada('${c.nome.replace(/'/g,"\\'")}')"
+        style="padding:10px 14px;cursor:pointer;font-size:13px;color:#ccc;border-bottom:1px solid rgba(255,255,255,0.04)"
+        onmouseover="this.style.background='rgba(139,0,255,0.08)'"
+        onmouseout="this.style.background='transparent'">
+        ${c.nome}
+        <span style="font-size:11px;color:#555;margin-left:8px">${(c.tipos||[]).join(', ')}</span>
+      </div>`).join('');
+  });
+}
+function selecionarClienteEntrada(nome){
+  document.getElementById('f-cli').value = nome;
+  document.getElementById('cli-suggestions').style.display = 'none';
+}
+function criarClienteSeNaoExiste(cli, val){
+  const nomeCliente = (cli||'').toUpperCase();
+  if(!nomeCliente) return;
+  const clienteExiste = clientes.find(c=>c.nome===nomeCliente);
+  if(!clienteExiste){
+    clientes.push({
+      id: nextId++,
+      nome: nomeCliente,
+      tipos: [],
+      servicos: [],
+      status: 'Ativo',
+      atual: val,
+      liquido: 0,
+      meta: 0,
+      obs: 'Criado automaticamente via lançamento'
+    });
+    sv('rs2_clientes', clientes);
+    if(typeof showToast==='function') showToast(`Cliente "${nomeCliente}" adicionado automaticamente.`, 'info');
+  }
+}
 
 function editEntrada(id){
   const e = entradas.find(x=>x.id===id);
@@ -1264,8 +1476,16 @@ function editEntrada(id){
       </div>
     </div>
     <div class="form-group">
+      <label class="form-label">Status do pagamento</label>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn btn-sm status-pgto-btn ${(!e.status_pgto||e.status_pgto==='Recebido')?'active':''}" data-status="Recebido" style="flex:1">✓ Recebido</button>
+        <button type="button" class="btn btn-sm status-pgto-btn ${e.status_pgto==='Pendente'?'active':''}" data-status="Pendente" style="flex:1">⏳ Pendente</button>
+      </div>
+    </div>
+    <div class="form-group" style="position:relative">
       <label class="form-label">Cliente / Descrição</label>
-      <input class="form-control" type="text" id="f-cli" value="${e.cliente}"/>
+      <input class="form-control" type="text" id="f-cli" value="${e.cliente}" autocomplete="off"/>
+      <div id="cli-suggestions" style="position:absolute;z-index:100;width:100%;background:#1A1A1A;border:1px solid rgba(139,0,255,0.2);border-radius:8px;margin-top:4px;display:none;max-height:200px;overflow-y:auto"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Categoria</label>
@@ -1290,14 +1510,23 @@ function editEntrada(id){
     sel.innerHTML = cfg.meses.map(m=>`<option ${m===mesAno?'selected':''}>${m}</option>`).join('');
   });
 
+  body.querySelectorAll('.status-pgto-btn').forEach(btn=>{
+    btn.addEventListener('click', () => {
+      body.querySelectorAll('.status-pgto-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  wireClienteAutocomplete(body);
+
   confirm.onclick = () => {
     const data = document.getElementById('f-data').value || null;
     const mes  = document.getElementById('f-mes').value;
+    const status_pgto = body.querySelector('.status-pgto-btn.active').dataset.status;
     const val  = parseFloat(document.getElementById('f-val').value);
     const cli  = document.getElementById('f-cli').value.trim().toUpperCase();
     const cat  = document.getElementById('f-cat').value;
     if(!cli||!val||isNaN(val)) return showToast('Preencha todos os campos.','error');
-    Object.assign(e, { data, mes, val, cliente: cli, cat });
+    Object.assign(e, { data, mes, val, cliente: cli, cat, status_pgto });
     sv('rs2_entradas', entradas);
     closeModal();
     renderAll();
@@ -1325,11 +1554,82 @@ function renderContratos(){
     <td>${previsaoBadge(c)}</td>
     <td><div class="row-actions">
       ${c.status==='Em aberto'?`<button class="btn btn-success btn-sm" onclick="recContrato(${c.id})">✓</button>`:''}
+      <button class="btn btn-ghost btn-sm" onclick="editContrato(${c.id})" title="Editar projeto/tipo">📋✎</button>
+      <button class="btn btn-ghost btn-sm" onclick="editParcela(${c.id})" title="Editar esta parcela">✎</button>
       <button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delContrato(${c.id}))">✕</button>
     </div></td></tr>`).join('')||'<tr><td colspan="8"><div class="empty"><div class="empty-icon">📋</div>Nenhum contrato</div></td></tr>';
 }
 function recContrato(id){const c=contratos.find(c=>c.id===id);if(c){c.status='Recebido';sv('rs2_contratos',contratos);renderAll();showToast('Parcela marcada como recebida!');}}
 function delContrato(id){contratos=contratos.filter(c=>c.id!==id);sv('rs2_contratos',contratos);renderAll();showToast('Removido.','info');}
+
+function editContrato(id){
+  openModal._editId = id;
+  openModal('contrato-edit');
+}
+function editParcela(id){
+  openModal._editId = id;
+  openModal('parcela-edit');
+}
+
+function gerarParcelas(total, numParcelas, mesInicial){
+  const mesesMap = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
+  const mesesNomes = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+
+  const [mesStr, anoStr] = [mesInicial.slice(0,3), parseInt(mesInicial.slice(4))];
+  let mesIdx = mesesMap[mesStr];
+  let ano = 2000 + anoStr;
+
+  const valorParcela = Math.floor((total / numParcelas) * 100) / 100;
+  const resto = Math.round((total - valorParcela * numParcelas) * 100) / 100;
+
+  const parcelas = [];
+  for (let i = 0; i < numParcelas; i++) {
+    const val = i === numParcelas - 1 ? valorParcela + resto : valorParcela;
+    const mesNome = mesesNomes[mesIdx % 12] + '/' + String(ano + Math.floor(mesIdx / 12)).slice(2);
+    parcelas.push({ prev: mesNome, valor: val, status: 'Em aberto', desc: `Parcela ${i+1}/${numParcelas}` });
+    mesIdx++;
+  }
+  return parcelas;
+}
+
+function garantirMesesParcelas(parcelas){
+  const mMap = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
+  let mudou=false;
+  parcelas.forEach(p=>{
+    if(!cfg.meses.includes(p.prev)){ cfg.meses.push(p.prev); mudou=true; }
+  });
+  if(mudou){
+    cfg.meses.sort((a,b)=>{
+      const [mA,aA]=[a.slice(0,3),parseInt(a.slice(4))];
+      const [mB,aB]=[b.slice(0,3),parseInt(b.slice(4))];
+      return aA!==aB ? aA-aB : mMap[mA]-mMap[mB];
+    });
+    sv('rs2_config', cfg);
+  }
+}
+
+function atualizarPreviewParcelas(){
+  const total = parseFloat(document.getElementById('f-total').value) || 0;
+  const num   = parseInt(document.getElementById('f-num-parcelas').value) || 1;
+  const mes   = document.getElementById('f-mes-inicial').value;
+  const preview = document.getElementById('parcelas-preview');
+  if (!total || !mes) { preview.innerHTML=''; return; }
+  const parcelas = gerarParcelas(total, num, mes);
+  preview.innerHTML = `
+    <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
+      Preview das parcelas
+    </div>
+    ${parcelas.map((p,i) => `
+      <div style="display:flex;justify-content:space-between;padding:6px 0;
+        border-bottom:1px solid rgba(255,255,255,0.04)">
+        <span style="font-size:12px;color:#888">${p.desc} — ${p.prev}</span>
+        <span style="font-size:12px;font-weight:600;color:#fff">${R(p.valor)}</span>
+      </div>`).join('')}
+    <div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px">
+      <span style="font-size:12px;font-weight:700;color:#fff">Total</span>
+      <span style="font-size:12px;font-weight:700;color:var(--accent)">${R(total)}</span>
+    </div>`;
+}
 
 // ═══════════════════════════════════════════
 // RENDER SAÍDAS
@@ -1345,19 +1645,83 @@ function renderSaidas(){
   const q=(searchEl.value||'').trim().toLowerCase();
   document.getElementById('search-saidas-clear').classList.toggle('show',q.length>0);
   let data=fil?saidas.filter(s=>s.mes===fil):saidas;
-  if(q) data=data.filter(s=>s.desc.toLowerCase().includes(q)||s.cat.toLowerCase().includes(q));
-  const cats={};data.forEach(s=>{cats[s.cat]=(cats[s.cat]||0)+s.val;});
-  document.getElementById('saidas-cats').innerHTML=Object.entries(cats).map(([cat,tot])=>`
-    <div class="saida-cat-card"><div style="display:flex;align-items:center;justify-content:space-between">
-    <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase">${cat}</div>
-    <div style="font-size:16px;font-weight:700;color:#fff">${R(tot)}</div></div></div>`).join('');
-  document.getElementById('tb-saidas').innerHTML=data.map(s=>`
-    <tr><td><span class="badge badge-gray">${s.mes}</span></td>
-    <td><span class="badge badge-purple">${s.cat}</span></td>
-    <td>${s.desc}</td><td class="money" style="color:var(--red)">${R(s.val)}</td>
-    <td><span class="badge ${s.tipo==='Fixo'?'badge-purple':'badge-yellow'}">${s.tipo}</span></td>
-    <td><div class="row-actions"><button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delSaida(${s.id}))">✕</button></div></td></tr>`).join('')
-    ||(q?`<tr><td colspan="6"><div class="empty"><div class="empty-icon">🔍</div>Nenhum resultado para "${searchEl.value}"</div></td></tr>`:'<tr><td colspan="6"><div class="empty"><div class="empty-icon">📭</div>Nenhuma saída</div></td></tr>');
+  if(q) data=data.filter(s=>(s.desc||'').toLowerCase().includes(q)||(s.cat||'').toLowerCase().includes(q)||(s.clienteVinculado||'').toLowerCase().includes(q));
+
+  const operacionais = data.filter(s=>!s.tipo_saida || s.tipo_saida==='operacional');
+  const projetos      = data.filter(s=>s.tipo_saida==='projeto');
+
+  const totalOp    = operacionais.reduce((s,x)=>s+x.val,0);
+  const totalProj  = projetos.reduce((s,x)=>s+x.val,0);
+  const totalGeral = totalOp + totalProj;
+
+  document.getElementById('saidas-cats').innerHTML = `
+    <div class="saida-cat-card">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase">Total Saídas</div>
+      <div style="font-size:20px;font-weight:700;color:var(--red);margin-top:4px">${R(totalGeral)}</div>
+    </div>
+    <div class="saida-cat-card">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase">Despesas Operacionais</div>
+      <div style="font-size:20px;font-weight:700;color:#fff;margin-top:4px">${R(totalOp)}</div>
+    </div>
+    <div class="saida-cat-card">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase">Custos de Projeto</div>
+      <div style="font-size:20px;font-weight:700;color:#FF6B00;margin-top:4px">${R(totalProj)}</div>
+    </div>`;
+
+  const tabelaProjetos = projetos.length>0 ? `
+    <div class="section-header" style="margin-top:20px">
+      <div class="section-title">Custos de Projeto</div>
+    </div>
+    <div class="table-card"><div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Mês</th><th>Data</th><th>Fornecedor</th><th>Função</th>
+          <th>Cliente / Projeto</th><th>Descrição</th><th>Valor</th><th>Ações</th>
+        </tr></thead>
+        <tbody>
+          ${projetos.map(s=>{
+            const forn = fornecedores.find(f=>f.id===s.fornecedorId);
+            const funcao = s.funcao || (forn ? (forn.especialidades||(forn.especialidade?[forn.especialidade]:[]))[0] : null);
+            return `<tr>
+              <td><span class="badge badge-gray">${s.mes}</span></td>
+              <td style="color:var(--text3);font-size:12px">${fmtData(s.data)}</td>
+              <td style="font-weight:600;color:#fff">${forn?forn.nome:'—'}</td>
+              <td>${funcao?fornecedorBadge(funcao):'—'}</td>
+              <td style="color:var(--text2)">${s.clienteVinculado||'—'}</td>
+              <td style="color:var(--text3);font-size:12px">${s.desc||'—'}</td>
+              <td class="money" style="color:var(--red)">${R(s.val)}</td>
+              <td><div class="row-actions"><button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delSaida(${s.id}))">✕</button></div></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div></div>` : '';
+
+  const tabelaOp = `
+    <div class="section-header" style="margin-top:20px">
+      <div class="section-title">Despesas Operacionais</div>
+    </div>
+    <div class="table-card"><div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Mês</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Tipo</th><th>Ações</th>
+        </tr></thead>
+        <tbody>
+          ${operacionais.map(s=>`
+            <tr>
+              <td><span class="badge badge-gray">${s.mes}</span></td>
+              <td><span class="badge badge-purple">${s.cat}</span></td>
+              <td>${s.desc}</td>
+              <td class="money" style="color:var(--red)">${R(s.val)}</td>
+              <td><span class="badge ${s.tipo==='Fixo'?'badge-purple':'badge-yellow'}">${s.tipo}</span></td>
+              <td><div class="row-actions"><button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delSaida(${s.id}))">✕</button></div></td>
+            </tr>`).join('') ||
+          (q?`<tr><td colspan="6"><div class="empty"><div class="empty-icon">🔍</div>Nenhum resultado para "${searchEl.value}"</div></td></tr>`:'<tr><td colspan="6"><div class="empty"><div class="empty-icon">📭</div>Nenhuma despesa operacional</div></td></tr>')}
+        </tbody>
+      </table>
+    </div></div>`;
+
+  document.getElementById('saidas-tabelas').innerHTML = tabelaProjetos + tabelaOp;
 }
 function delSaida(id){saidas=saidas.filter(s=>s.id!==id);sv('rs2_saidas',saidas);renderAll();showToast('Removido.','info');}
 
@@ -1371,8 +1735,8 @@ function renderMeta(){
   const mediaFixa=meses.length?Math.round(fixaAcum/meses.length):0;
   const pct=Math.min(Math.round(mediaFixa/META*100),100);
   const falta=Math.max(META-mediaFixa,0);
-  const clientesFixos=clientes.filter(c=>c.servico==='Cliente Fixo');
-  const fixaAtual=clientesFixos.reduce((s,c)=>s+c.atual,0);
+  const clientesFixos=clientes.filter(c=>(c.tipos||[]).includes('Fixo'));
+  const fixaAtual=clientesFixos.reduce((s,c)=>s+(c.liquido>0?c.liquido:c.atual),0);
   const fixaMeta=clientesFixos.reduce((s,c)=>s+c.meta,0);
 
   document.getElementById('meta-cards').innerHTML=`
@@ -1396,22 +1760,26 @@ function renderMeta(){
       <div style="margin-top:4px;font-size:12px;color:var(--green)">+${R(fixaMeta-fixaAtual)}/mês se atingir todas as metas</div>
     </div>`;
 
-  document.getElementById('clientes-meta-list').innerHTML=clientes.filter(c=>c.servico==='Cliente Fixo').map(c=>`
+  document.getElementById('clientes-meta-list').innerHTML=clientes.filter(c=>(c.tipos||[]).includes('Fixo')).map(c=>{
+    const valorParaMeta = c.liquido>0 ? c.liquido : c.atual;
+    return `
     <div class="cliente-row">
       <div style="flex:1">
         <div style="font-size:13px;font-weight:600;color:#fff">${c.nome}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${c.status||''}</div>
         <div class="progress-wrap" style="width:120px;margin-top:6px">
-          <div class="progress-fill" style="width:${Math.min(Math.round(c.atual/c.meta*100),100)}%"></div>
+          <div class="progress-fill" style="width:${Math.min(Math.round(valorParaMeta/c.meta*100),100)}%"></div>
         </div>
       </div>
       <div style="text-align:right">
         <div style="font-size:14px;font-weight:700">${R(c.atual)}</div>
+        ${c.liquido>0?`<div style="font-size:11px;color:var(--green)">líquido: ${R(c.liquido)}</div>`:''}
         <div style="font-size:11px;color:var(--accent-light)">meta: ${R(c.meta)}</div>
-        ${c.atual<c.meta?`<div style="font-size:11px;color:var(--yellow)">+${R(c.meta-c.atual)}</div>`:'<div style="font-size:11px;color:var(--green)">✓</div>'}
+        ${valorParaMeta<c.meta?`<div style="font-size:11px;color:var(--yellow)">+${R(c.meta-valorParaMeta)}</div>`:'<div style="font-size:11px;color:var(--green)">✓</div>'}
       </div>
       <span style="margin-left:8px;display:inline-block"><button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delCliente(${c.id}))">✕</button></span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   const ctx=document.getElementById('chart-meta').getContext('2d');
   if(metaChart) metaChart.destroy();
@@ -1440,20 +1808,35 @@ function getResumoCliente(nomeCliente){
   const entradasCliente = entradas.filter(e=>
     e.cliente.includes(nomeCliente) || nomeCliente.includes(e.cliente)
   );
+  const entradasRecebidas = entradasCliente.filter(e=>!e.status_pgto || e.status_pgto==='Recebido');
+  const entradasPrevistas = entradasCliente.filter(e=>e.status_pgto==='Pendente');
+
+  const custosCliente = saidas.filter(s=>
+    s.tipo_saida==='projeto' &&
+    s.clienteVinculado &&
+    (s.clienteVinculado.includes(nomeCliente) || nomeCliente.includes(s.clienteVinculado))
+  );
 
   const porMes = {};
-  entradasCliente.forEach(e=>{ porMes[e.mes] = (porMes[e.mes]||0) + e.val; });
+  entradasRecebidas.forEach(e=>{ porMes[e.mes] = (porMes[e.mes]||0) + e.val; });
+
+  const porMesPrevisto = {};
+  entradasPrevistas.forEach(e=>{ porMesPrevisto[e.mes] = (porMesPrevisto[e.mes]||0) + e.val; });
 
   const porAno = {};
-  entradasCliente.forEach(e=>{
+  entradasRecebidas.forEach(e=>{
     const ano = '20' + e.mes.slice(4);
     porAno[ano] = (porAno[ano]||0) + e.val;
   });
 
-  const total = entradasCliente.reduce((s,e)=>s+e.val,0);
+  const total = entradasRecebidas.reduce((s,e)=>s+e.val,0);
+  const totalPrevisto = entradasPrevistas.reduce((s,e)=>s+e.val,0);
+  const totalCustos = custosCliente.reduce((s,x)=>s+x.val,0);
+  const totalLiquido = total - totalCustos;
+  const margem = total>0 ? Math.round(totalLiquido/total*100) : 0;
   const totalLancamentos = entradasCliente.length;
 
-  return { porMes, porAno, total, totalLancamentos, entradas: entradasCliente };
+  return { porMes, porMesPrevisto, porAno, total, totalPrevisto, totalCustos, totalLiquido, margem, totalLancamentos, entradas: entradasCliente };
 }
 
 function toggleResumoCliente(id){
@@ -1469,17 +1852,18 @@ function toggleResumoCliente(id){
 
   const resumo = getResumoCliente(c.nome);
 
-  const mesesOrdenados = Object.keys(resumo.porMes).sort((a,b)=>{
-    const mMap = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
+  const mMapOrd = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
+  const ordenaMes = (a,b)=>{
     const [mA,aA] = [a.slice(0,3),parseInt(a.slice(4))];
     const [mB,aB] = [b.slice(0,3),parseInt(b.slice(4))];
-    return aA!==aB ? aA-aB : mMap[mA]-mMap[mB];
-  });
+    return aA!==aB ? aA-aB : mMapOrd[mA]-mMapOrd[mB];
+  };
+  const mesesOrdenados = [...new Set([...Object.keys(resumo.porMes), ...Object.keys(resumo.porMesPrevisto)])].sort(ordenaMes);
 
   const tabelaMeses = mesesOrdenados.map(mes=>`
     <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
       <span style="font-size:12px;color:#888">${mes}</span>
-      <span style="font-size:12px;font-weight:600;color:#fff">${R(resumo.porMes[mes])}</span>
+      <span style="font-size:12px;font-weight:600;color:#fff">${resumo.porMes[mes]?R(resumo.porMes[mes]):'—'}${resumo.porMesPrevisto[mes]?` <span style="color:var(--yellow)">(+${R(resumo.porMesPrevisto[mes])} previsto)</span>`:''}</span>
     </div>`).join('');
 
   const tabelaAnos = Object.entries(resumo.porAno)
@@ -1490,11 +1874,11 @@ function toggleResumoCliente(id){
         <span style="font-size:12px;font-weight:700;color:var(--accent-light)">${R(val)}</span>
       </div>`).join('');
 
-  const cor = (cfg.coresEntrada && cfg.coresEntrada[c.servico]) || '#8B00FF';
+  const cor = cfg.cor || '#8B00FF';
 
   const html = `
     <tr id="resumo-cliente-row" data-cliente-id="${id}">
-      <td colspan="8" style="padding:0;background:rgba(0,0,0,0.3)">
+      <td colspan="9" style="padding:0;background:rgba(0,0,0,0.3)">
         <div style="padding:20px;border-top:2px solid ${cor}33;border-bottom:1px solid rgba(255,255,255,0.06)">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
             <div style="font-size:13px;font-weight:700;color:#fff">
@@ -1508,6 +1892,14 @@ function toggleResumoCliente(id){
               <div style="text-align:center">
                 <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px">Lançamentos</div>
                 <div style="font-size:20px;font-weight:800;color:#fff">${resumo.totalLancamentos}</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px">Custos equipe</div>
+                <div style="font-size:20px;font-weight:800;color:var(--red)">${R(resumo.totalCustos)}</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px">Margem</div>
+                <div style="font-size:20px;font-weight:800;color:${resumo.margem>=50?'var(--green)':'var(--yellow)'}">${resumo.margem}%</div>
               </div>
             </div>
           </div>
@@ -1575,7 +1967,8 @@ function renderClientes(){
         ${c.nome}
         <span style="font-size:10px;color:#444;margin-left:6px">▼</span>
       </td>
-      <td>${catBadge(c.servico||'')}</td>
+      <td>${(c.tipos||[]).map(t=>`<span class="badge badge-purple" style="margin-right:3px">${t}</span>`).join('')||'—'}</td>
+      <td style="font-size:12px;color:var(--text2)">${(c.servicos||(c.servico?[c.servico]:[])).slice(0,2).join(', ')||'—'}${(c.servicos||[]).length>2?` <span style="color:#555">+${c.servicos.length-2}</span>`:''}</td>
       <td><span class="badge ${statusBadge[c.status]||'badge-gray'}">${c.status}</span></td>
       <td style="font-weight:600;color:#fff">${c.atual>0?R(c.atual):'—'}</td>
       <td style="color:var(--text2)">${R(c.meta)}</td>
@@ -1593,13 +1986,165 @@ function renderClientes(){
         </div>
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="8"><div class="empty"><div class="empty-icon">👥</div>Nenhum cliente</div></td></tr>';
+  }).join('') || '<tr><td colspan="9"><div class="empty"><div class="empty-icon">👥</div>Nenhum cliente</div></td></tr>';
 
   document.querySelectorAll('.clientes-filter-btn').forEach(btn=>{
     btn.onclick = () => {
       document.querySelectorAll('.clientes-filter-btn').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       renderClientes();
+    };
+  });
+}
+
+// ═══════════════════════════════════════════
+// RENDER FORNECEDORES
+// ═══════════════════════════════════════════
+function editFornecedor(id){
+  openModal._editId = id;
+  openModal('fornecedor-edit');
+}
+
+function delFornecedor(id){
+  if(!confirm('Remover fornecedor?')) return;
+  fornecedores = fornecedores.filter(f=>f.id!==id);
+  sv('rs2_fornecedores', fornecedores);
+  renderAll();
+}
+
+function toggleResumoFornecedor(id){
+  const aberto = document.getElementById('resumo-forn-row');
+  if(aberto){
+    const eraOMesmo = aberto.dataset.fornId === String(id);
+    aberto.remove();
+    if(eraOMesmo) return;
+  }
+
+  const f = fornecedores.find(x=>x.id===id);
+  if(!f) return;
+
+  const pgtos = saidas.filter(s=>s.tipo_saida==='projeto' && s.fornecedorId===id);
+  const total = pgtos.reduce((s,x)=>s+x.val,0);
+
+  const porCliente = {};
+  pgtos.forEach(s=>{
+    const k = s.clienteVinculado || 'Sem vínculo';
+    porCliente[k] = (porCliente[k]||0) + s.val;
+  });
+
+  const porMes = {};
+  pgtos.forEach(s=>{ porMes[s.mes] = (porMes[s.mes]||0) + s.val; });
+
+  const esp0 = (f.especialidades||(f.especialidade?[f.especialidade]:[]))[0];
+  const cor = (cfg.coresFornecedor && cfg.coresFornecedor[esp0]) || '#8B00FF';
+
+  const html = `
+    <tr id="resumo-forn-row" data-forn-id="${id}">
+      <td colspan="7" style="padding:0;background:rgba(0,0,0,0.3)">
+        <div style="padding:20px;border-top:2px solid ${cor}33">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <div style="font-size:13px;font-weight:700;color:#fff">📊 ${f.nome} — Histórico de Pagamentos</div>
+            <div style="display:flex;gap:16px">
+              <div style="text-align:center">
+                <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px">Total pago</div>
+                <div style="font-size:20px;font-weight:800;color:#fff">${R(total)}</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px">Projetos</div>
+                <div style="font-size:20px;font-weight:800;color:#fff">${Object.keys(porCliente).length}</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+            <div>
+              <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Por cliente / projeto</div>
+              ${Object.entries(porCliente).map(([k,v])=>`
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+                  <span style="font-size:12px;color:#888">${k}</span>
+                  <span style="font-size:12px;font-weight:600;color:#fff">${R(v)}</span>
+                </div>`).join('') || '<div style="font-size:12px;color:#444">Nenhum registro</div>'}
+            </div>
+            <div>
+              <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Por mês</div>
+              ${Object.entries(porMes).map(([m,v])=>`
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+                  <span style="font-size:12px;color:#888">${m}</span>
+                  <span style="font-size:12px;font-weight:600;color:#fff">${R(v)}</span>
+                </div>`).join('') || '<div style="font-size:12px;color:#444">—</div>'}
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>`;
+
+  const linha = document.querySelector(`[data-forn-id-row="${id}"]`);
+  if(linha) linha.insertAdjacentHTML('afterend', html);
+}
+
+function renderFornecedores(){
+  const totalPago = saidas
+    .filter(s=>s.tipo_saida==='projeto')
+    .reduce((s,x)=>s+x.val,0);
+  const fornAtivos = [...new Set(
+    saidas.filter(s=>s.tipo_saida==='projeto' && s.fornecedorId).map(s=>s.fornecedorId)
+  )].length;
+
+  document.getElementById('fornecedores-summary-cards').innerHTML = `
+    <div class="card" style="animation-delay:0ms">
+      <div class="card-dot"></div>
+      <div class="card-label">Fornecedores Cadastrados</div>
+      <div class="card-value">${fornecedores.length}</div>
+      <div class="card-sub">${fornAtivos} com pagamentos registrados</div>
+    </div>
+    <div class="card red" style="animation-delay:60ms">
+      <div class="card-dot"></div>
+      <div class="card-label">Total Pago em Equipe</div>
+      <div class="card-value">${R(totalPago)}</div>
+      <div class="card-sub">todos os períodos</div>
+    </div>`;
+
+  const especialidades = [...new Set(fornecedores.flatMap(f=>f.especialidades||(f.especialidade?[f.especialidade]:[])))];
+  document.getElementById('fornecedores-filtro').innerHTML =
+    `<button class="btn btn-ghost btn-sm forn-filter-btn active" data-esp="">Todos</button>` +
+    especialidades.map(e=>`<button class="btn btn-ghost btn-sm forn-filter-btn" data-esp="${e}">${e}</button>`).join('');
+
+  const filtroAtivo = document.querySelector('.forn-filter-btn.active');
+  const espFiltro = filtroAtivo ? filtroAtivo.dataset.esp : '';
+  const lista = espFiltro ? fornecedores.filter(f=>(f.especialidades||(f.especialidade?[f.especialidade]:[])).includes(espFiltro)) : fornecedores;
+
+  document.getElementById('tb-fornecedores').innerHTML = lista.map(f=>{
+    const pgtos = saidas.filter(s=>s.tipo_saida==='projeto' && s.fornecedorId===f.id);
+    const totalF = pgtos.reduce((s,x)=>s+x.val,0);
+    const projetos = [...new Set(pgtos.map(s=>s.clienteVinculado).filter(Boolean))];
+    const esps = f.especialidades||(f.especialidade?[f.especialidade]:[]);
+    const badgesEsp = esps.slice(0,2).map(e=>fornecedorBadge(e)).join('');
+    const extraEsp = esps.length>2 ? `<span style="font-size:11px;color:#555">+${esps.length-2}</span>` : '';
+
+    return `<tr data-forn-id-row="${f.id}" onclick="toggleResumoFornecedor(${f.id})" style="cursor:pointer">
+      <td style="font-weight:700;color:#fff">
+        ${f.nome}
+        <span style="font-size:10px;color:#444;margin-left:6px">▼</span>
+      </td>
+      <td>${badgesEsp}${extraEsp}</td>
+      <td style="color:var(--text3);font-size:12px">${f.contato || '—'}</td>
+      <td style="font-weight:700;color:#fff">${totalF>0?R(totalF):'—'}</td>
+      <td style="font-size:12px;color:var(--text3)">${projetos.length>0 ? projetos.slice(0,2).join(', ') + (projetos.length>2?` +${projetos.length-2}`:'') : '—'}</td>
+      <td style="color:var(--text3);font-size:12px">${f.obs || '—'}</td>
+      <td onclick="event.stopPropagation()">
+        <div class="row-actions">
+          <button class="btn btn-ghost btn-sm" onclick="editFornecedor(${f.id})">✎</button>
+          <button class="btn btn-danger btn-sm" onclick="delFornecedor(${f.id})">✕</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7"><div class="empty"><div class="empty-icon">🤝</div>Nenhum fornecedor cadastrado</div></td></tr>';
+
+  document.querySelectorAll('.forn-filter-btn').forEach(btn=>{
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.forn-filter-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderFornecedores();
     };
   });
 }
@@ -1659,6 +2204,34 @@ function renderConfig(){
       <button class="btn btn-danger btn-sm" onclick="removeCatSaida(${i})">✕</button>
     </div>`).join('');
 
+  // Tipos de fornecedor
+  document.getElementById('tipos-forn-list').innerHTML = cfg.tiposFornecedor.map((t,i)=>{
+    const cor = (cfg.coresFornecedor && cfg.coresFornecedor[t]) || '#8B00FF';
+    return `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+        <input type="color" value="${cor}"
+          style="width:34px;height:34px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;padding:2px;flex-shrink:0"
+          onchange="updateCorFornecedor('${t}', this.value)"/>
+        <input class="config-input" style="flex:1" value="${t}"
+          onchange="renameTipoFornecedor(${i}, this.value)"/>
+        <button class="btn btn-danger btn-sm" onclick="removeTipoFornecedor(${i})">✕</button>
+      </div>`;
+  }).join('');
+
+  // Tipos de cliente
+  document.getElementById('tipos-cliente-list').innerHTML = cfg.tiposCliente.map((t,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+      <input class="config-input" style="flex:1" value="${t}" onchange="renameTipoCliente(${i},this.value)"/>
+      <button class="btn btn-danger btn-sm" onclick="removeTipoCliente(${i})">✕</button>
+    </div>`).join('');
+
+  // Serviços prestados
+  document.getElementById('servicos-prestados-list').innerHTML = cfg.servicosPrestados.map((s,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+      <input class="config-input" style="flex:1" value="${s}" onchange="renameServicoPrestado(${i},this.value)"/>
+      <button class="btn btn-danger btn-sm" onclick="removeServicoPrestado(${i})">✕</button>
+    </div>`).join('');
+
   // Meses
   document.getElementById('meses-list').innerHTML=cfg.meses.map((m,i)=>`
     <span class="cat-tag">${m}<button onclick="removeMes(${i})">✕</button></span>`).join('');
@@ -1709,6 +2282,76 @@ function updateCorCategoria(cat,cor){
   sv('rs2_config',cfg);
   renderAll();
 }
+function updateCorFornecedor(tipo,cor){
+  if(!cfg.coresFornecedor) cfg.coresFornecedor={};
+  cfg.coresFornecedor[tipo]=cor;
+  sv('rs2_config',cfg);
+  renderAll();
+}
+function renameTipoFornecedor(i,novo){
+  const antigo=cfg.tiposFornecedor[i];
+  cfg.tiposFornecedor[i]=novo;
+  fornecedores.forEach(f=>{ if(f.especialidades){ const idx=f.especialidades.indexOf(antigo); if(idx>-1) f.especialidades[idx]=novo; } });
+  if(cfg.coresFornecedor && cfg.coresFornecedor[antigo]){
+    cfg.coresFornecedor[novo]=cfg.coresFornecedor[antigo];
+    delete cfg.coresFornecedor[antigo];
+  }
+  sv('rs2_config',cfg);sv('rs2_fornecedores',fornecedores);
+  renderAll();
+}
+function removeTipoFornecedor(i){
+  if(!confirm('Remover tipo?'))return;
+  cfg.tiposFornecedor.splice(i,1);
+  sv('rs2_config',cfg);renderConfig();
+}
+function adicionarTipoFornecedor(){
+  const v=document.getElementById('novo-tipo-forn').value.trim();
+  if(!v)return;
+  cfg.tiposFornecedor.push(v);
+  sv('rs2_config',cfg);
+  document.getElementById('novo-tipo-forn').value='';
+  renderConfig();
+}
+
+function renameTipoCliente(i,novo){
+  const antigo=cfg.tiposCliente[i];
+  cfg.tiposCliente[i]=novo;
+  clientes.forEach(c=>{ if(c.tipos){ const idx=c.tipos.indexOf(antigo); if(idx>-1) c.tipos[idx]=novo; } });
+  sv('rs2_config',cfg);sv('rs2_clientes',clientes);
+}
+function removeTipoCliente(i){
+  if(!confirm('Remover tipo?'))return;
+  cfg.tiposCliente.splice(i,1);
+  sv('rs2_config',cfg);renderConfig();
+}
+function adicionarTipoCliente(){
+  const v=document.getElementById('novo-tipo-cliente').value.trim();
+  if(!v)return;
+  cfg.tiposCliente.push(v);
+  sv('rs2_config',cfg);
+  document.getElementById('novo-tipo-cliente').value='';
+  renderConfig();
+}
+
+function renameServicoPrestado(i,novo){
+  const antigo=cfg.servicosPrestados[i];
+  cfg.servicosPrestados[i]=novo;
+  clientes.forEach(c=>{ if(c.servicos){ const idx=c.servicos.indexOf(antigo); if(idx>-1) c.servicos[idx]=novo; } });
+  sv('rs2_config',cfg);sv('rs2_clientes',clientes);
+}
+function removeServicoPrestado(i){
+  if(!confirm('Remover serviço?'))return;
+  cfg.servicosPrestados.splice(i,1);
+  sv('rs2_config',cfg);renderConfig();
+}
+function adicionarServicoPrestado(){
+  const v=document.getElementById('novo-servico-prestado').value.trim();
+  if(!v)return;
+  cfg.servicosPrestados.push(v);
+  sv('rs2_config',cfg);
+  document.getElementById('novo-servico-prestado').value='';
+  renderConfig();
+}
 function removeCatEntrada(i){
   if(!confirm('Remover categoria?'))return;
   cfg.catsEntrada.splice(i,1);sv('rs2_config',cfg);renderConfig();
@@ -1744,9 +2387,9 @@ function exportarExcel(){
 
   // Aba Entradas
   const wsE=XLSX.utils.json_to_sheet(entradas.map(e=>({
-    'Data':e.data?new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR'):'','Mês':e.mes,'Cliente/Descrição':e.cliente,'Categoria':e.cat,'Valor':e.val
+    'Data':e.data?new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR'):'','Mês':e.mes,'Status':e.status_pgto||'Recebido','Cliente/Descrição':e.cliente,'Categoria':e.cat,'Valor':e.val
   })));
-  wsE['!cols']=[{wch:12},{wch:10},{wch:35},{wch:22},{wch:12}];
+  wsE['!cols']=[{wch:12},{wch:10},{wch:12},{wch:35},{wch:22},{wch:12}];
   XLSX.utils.book_append_sheet(wb,wsE,'Entradas 2026');
 
   // Aba Contratos
@@ -1782,9 +2425,19 @@ function exportarExcel(){
   XLSX.utils.book_append_sheet(wb,wsH,'Histórico 2025-2026');
 
   // Aba Clientes
-  const wsF=XLSX.utils.json_to_sheet(clientes.map(c=>({'Cliente':c.nome,'Serviço':c.servico||'','Status':c.status||'','Valor Atual/Mês':c.atual,'Meta/Mês':c.meta,'Diferença':c.meta-c.atual,'Observação':c.obs||''})));
-  wsF['!cols']=[{wch:24},{wch:18},{wch:12},{wch:16},{wch:12},{wch:12},{wch:30}];
+  const wsF=XLSX.utils.json_to_sheet(clientes.map(c=>({'Cliente':c.nome,'Tipos':(c.tipos||[]).join(', '),'Serviços':(c.servicos||(c.servico?[c.servico]:[])).join(', '),'Status':c.status||'','Valor Atual/Mês':c.atual,'Valor Líquido/Mês':c.liquido||0,'Meta/Mês':c.meta,'Diferença':c.meta-c.atual,'Observação':c.obs||''})));
+  wsF['!cols']=[{wch:24},{wch:16},{wch:28},{wch:12},{wch:16},{wch:16},{wch:12},{wch:12},{wch:30}];
   XLSX.utils.book_append_sheet(wb,wsF,'Clientes');
+
+  // Aba Fornecedores
+  const wsForn = XLSX.utils.json_to_sheet(fornecedores.map(f=>({
+    'Nome': f.nome,
+    'Especialidades': (f.especialidades||(f.especialidade?[f.especialidade]:[])).join(', '),
+    'Contato': f.contato,
+    'Observação': f.obs
+  })));
+  wsForn['!cols'] = [{wch:24},{wch:22},{wch:24},{wch:30}];
+  XLSX.utils.book_append_sheet(wb, wsForn, 'Fornecedores');
 
   const now=new Date();
   const nome=`${cfg.nome||'RafaSilva'}_Financeiro_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`;
@@ -1796,7 +2449,7 @@ function exportarExcel(){
 // BACKUP / RESTORE JSON
 // ═══════════════════════════════════════════
 function exportarJSON(){
-  const data=JSON.stringify({entradas,contratos,saidas,clientes,cfg},null,2);
+  const data=JSON.stringify({entradas,contratos,saidas,clientes,fornecedores,cfg},null,2);
   const a=document.createElement('a');
   a.href='data:application/json;charset=utf-8,'+encodeURIComponent(data);
   a.download=`backup_financeiro_${new Date().toISOString().slice(0,10)}.json`;
@@ -1814,6 +2467,7 @@ function processarImportJSON(input){
       if(d.contratos) contratos=d.contratos,sv('rs2_contratos',contratos);
       if(d.saidas) saidas=d.saidas,sv('rs2_saidas',saidas);
       if(d.clientes) clientes=d.clientes,sv('rs2_clientes',clientes);
+      if(d.fornecedores) fornecedores=d.fornecedores, sv('rs2_fornecedores', fornecedores);
       if(d.cfg) cfg=Object.assign({},CONFIG_SEED,d.cfg),sv('rs2_config',cfg);
       aplicarTema();renderAll();showToast('Backup restaurado com sucesso!');
     }catch(err){showToast('Arquivo inválido. Certifique-se de usar um backup JSON gerado por este sistema.','error');}
@@ -1824,8 +2478,8 @@ function processarImportJSON(input){
 function resetarDados(){
   if(!confirm('⚠ ATENÇÃO: Isso apaga TODOS os lançamentos, contratos e saídas. Tem certeza?'))return;
   if(!confirm('Segunda confirmação: deseja mesmo resetar tudo?'))return;
-  entradas=ENTRADAS_SEED;contratos=CONTRATOS_SEED;saidas=SAIDAS_SEED;clientes=CLIENTES_SEED;
-  sv('rs2_entradas',entradas);sv('rs2_contratos',contratos);sv('rs2_saidas',saidas);sv('rs2_clientes',clientes);
+  entradas=ENTRADAS_SEED;contratos=CONTRATOS_SEED;saidas=SAIDAS_SEED;clientes=CLIENTES_SEED;fornecedores=FORNECEDORES_SEED;
+  sv('rs2_entradas',entradas);sv('rs2_contratos',contratos);sv('rs2_saidas',saidas);sv('rs2_clientes',clientes);sv('rs2_fornecedores',fornecedores);
   renderAll();showToast('Dados resetados para o estado inicial.','info');
 }
 
@@ -1846,8 +2500,19 @@ function openModal(type){
         <div class="form-group"><label class="form-label">Mês</label><select class="form-control" id="f-mes">${mOpts}</select></div>
         <div class="form-group"><label class="form-label">Data do pagamento</label><input class="form-control" type="date" id="f-data"/></div>
       </div>
+      <div class="form-group">
+        <label class="form-label">Status do pagamento</label>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="btn btn-sm status-pgto-btn active" data-status="Recebido" style="flex:1">✓ Recebido</button>
+          <button type="button" class="btn btn-sm status-pgto-btn" data-status="Pendente" style="flex:1">⏳ Pendente</button>
+        </div>
+      </div>
       <div class="form-group"><label class="form-label">Valor (R$)</label><input class="form-control" type="number" id="f-val" placeholder="0" min="0" step="0.01"/></div>
-      <div class="form-group"><label class="form-label">Cliente / Descrição</label><input class="form-control" type="text" id="f-cli" placeholder="Ex: IDEALTEC, FOTOP..."/></div>
+      <div class="form-group" style="position:relative">
+        <label class="form-label">Cliente / Descrição</label>
+        <input class="form-control" type="text" id="f-cli" placeholder="Digite ou selecione um cliente..." autocomplete="off"/>
+        <div id="cli-suggestions" style="position:absolute;z-index:100;width:100%;background:#1A1A1A;border:1px solid rgba(139,0,255,0.2);border-radius:8px;margin-top:4px;display:none;max-height:200px;overflow-y:auto"></div>
+      </div>
       <div class="form-group"><label class="form-label">Categoria</label><select class="form-control" id="f-cat">${cOpts}</select></div>`;
     document.getElementById('f-data').value = new Date().toISOString().split('T')[0];
     document.getElementById('f-data').addEventListener('change', function(){
@@ -1867,15 +2532,25 @@ function openModal(type){
       const sel = document.getElementById('f-mes');
       sel.innerHTML = cfg.meses.map(m => `<option ${m === mesAno ? 'selected' : ''}>${m}</option>`).join('');
     });
+    body.querySelectorAll('.status-pgto-btn').forEach(btn=>{
+      btn.addEventListener('click', () => {
+        body.querySelectorAll('.status-pgto-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+    wireClienteAutocomplete(body);
     confirm.onclick=()=>{
       const mes=document.getElementById('f-mes').value;
       const data=document.getElementById('f-data').value||null;
+      const status_pgto=body.querySelector('.status-pgto-btn.active').dataset.status;
       const val=parseFloat(document.getElementById('f-val').value);
       const cli=document.getElementById('f-cli').value.trim().toUpperCase();
       const cat=document.getElementById('f-cat').value;
       if(!cli||!val||isNaN(val))return showToast('Preencha todos os campos.','error');
-      entradas.push({id:nextId++,mes,data,cliente:cli,cat,val});
-      sv('rs2_entradas',entradas);closeModal();renderAll();showToast('Entrada salva com sucesso!');
+      entradas.push({id:nextId++,mes,data,cliente:cli,cat,val,status_pgto});
+      sv('rs2_entradas',entradas);
+      criarClienteSeNaoExiste(cli,val);
+      closeModal();renderAll();showToast('Entrada salva com sucesso!');
     };
   }
   else if(type==='contrato'){
@@ -1886,27 +2561,115 @@ function openModal(type){
         <div class="form-group"><label class="form-label">Tipo</label><select class="form-control" id="f-tipo">${cOpts}</select></div>
         <div class="form-group"><label class="form-label">Valor Total do Projeto</label><input class="form-control" type="number" id="f-total" placeholder="0"/></div>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Valor Líquido (seu %)</label><input class="form-control" type="number" id="f-liq" placeholder="Ex: se fica 80%, coloque 80% do total"/></div>
-        <div class="form-group"><label class="form-label">Parcela (ex: 1/3)</label><input class="form-control" type="text" id="f-par" placeholder="1/1"/></div>
+      <div class="form-group">
+        <label class="form-label">Parcelas</label>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="btn btn-sm parcela-modo-btn active" data-modo="manual" style="flex:1">Manual</button>
+          <button type="button" class="btn btn-sm parcela-modo-btn" data-modo="auto" style="flex:1">Automático</button>
+        </div>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Valor desta parcela</label><input class="form-control" type="number" id="f-vpar" placeholder="0"/></div>
-        <div class="form-group"><label class="form-label">Previsão (ex: AGO/26)</label><input class="form-control" type="text" id="f-prev" placeholder="AGO/26"/></div>
+      <div id="bloco-parcela-manual">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Valor Líquido (seu %)</label><input class="form-control" type="number" id="f-liq" placeholder="Ex: se fica 80%, coloque 80% do total"/></div>
+          <div class="form-group"><label class="form-label">Parcela (ex: 1/3)</label><input class="form-control" type="text" id="f-par" placeholder="1/1"/></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Valor desta parcela</label><input class="form-control" type="number" id="f-vpar" placeholder="0"/></div>
+          <div class="form-group"><label class="form-label">Previsão (ex: AGO/26)</label><input class="form-control" type="text" id="f-prev" placeholder="AGO/26"/></div>
+        </div>
+      </div>
+      <div id="bloco-parcela-auto" style="display:none">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Número de parcelas</label><input class="form-control" type="number" id="f-num-parcelas" value="2" min="1"/></div>
+          <div class="form-group"><label class="form-label">Mês inicial</label><select class="form-control" id="f-mes-inicial">${mOpts}</select></div>
+        </div>
+        <div id="parcelas-preview" style="margin-top:12px"></div>
       </div>
       <div class="form-group"><label class="form-label">Observação</label><input class="form-control" type="text" id="f-obs" placeholder="Ex: entrada, entrega, restante..."/></div>`;
+
+    body.querySelectorAll('.parcela-modo-btn').forEach(btn=>{
+      btn.addEventListener('click', () => {
+        body.querySelectorAll('.parcela-modo-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        const auto = btn.dataset.modo==='auto';
+        document.getElementById('bloco-parcela-manual').style.display = auto?'none':'block';
+        document.getElementById('bloco-parcela-auto').style.display = auto?'block':'none';
+        if(auto) atualizarPreviewParcelas();
+      });
+    });
+    ['f-total','f-num-parcelas','f-mes-inicial'].forEach(id=>{
+      document.getElementById(id).addEventListener('input', atualizarPreviewParcelas);
+      document.getElementById(id).addEventListener('change', atualizarPreviewParcelas);
+    });
+
     confirm.onclick=()=>{
       const proj=document.getElementById('f-proj').value.trim().toUpperCase();
       const tipo=document.getElementById('f-tipo').value;
       const total=parseFloat(document.getElementById('f-total').value)||0;
-      const liq=parseFloat(document.getElementById('f-liq').value)||total;
-      const par=document.getElementById('f-par').value||'1/1';
-      const vpar=parseFloat(document.getElementById('f-vpar').value)||0;
-      const prev=document.getElementById('f-prev').value;
       const obs=document.getElementById('f-obs').value;
-      if(!proj||!vpar)return showToast('Preencha projeto e valor da parcela.','error');
-      contratos.push({id:nextId++,projeto:proj,tipo,total,liquido:liq,parcela:par,valor:vpar,status:'Em aberto',prev,obs});
-      sv('rs2_contratos',contratos);closeModal();renderAll();showToast('Contrato salvo com sucesso!');
+      const modoAuto = body.querySelector('.parcela-modo-btn.active').dataset.modo==='auto';
+      if(!proj) return showToast('Preencha o nome do projeto.','error');
+
+      if(modoAuto){
+        const numParcelas=parseInt(document.getElementById('f-num-parcelas').value)||1;
+        const mesInicial=document.getElementById('f-mes-inicial').value;
+        if(!total) return showToast('Informe o valor total do contrato.','error');
+        const parcelas=gerarParcelas(total,numParcelas,mesInicial);
+        garantirMesesParcelas(parcelas);
+        parcelas.forEach((p,i)=>{
+          contratos.push({id:nextId++,projeto:proj,tipo,total,liquido:total,parcela:`${i+1}/${numParcelas}`,valor:p.valor,status:'Em aberto',prev:p.prev,obs:obs||p.desc});
+        });
+        sv('rs2_contratos',contratos);closeModal();renderAll();showToast(`${numParcelas} parcelas geradas com sucesso!`);
+      } else {
+        const liq=parseFloat(document.getElementById('f-liq').value)||total;
+        const par=document.getElementById('f-par').value||'1/1';
+        const vpar=parseFloat(document.getElementById('f-vpar').value)||0;
+        const prev=document.getElementById('f-prev').value;
+        if(!vpar)return showToast('Preencha o valor da parcela.','error');
+        contratos.push({id:nextId++,projeto:proj,tipo,total,liquido:liq,parcela:par,valor:vpar,status:'Em aberto',prev,obs});
+        sv('rs2_contratos',contratos);closeModal();renderAll();showToast('Contrato salvo com sucesso!');
+      }
+    };
+  }
+  else if(type==='contrato-edit'){
+    const c = contratos.find(x=>x.id===openModal._editId);
+    if(!c){ closeModal(); return; }
+    title.textContent='✎ Editar Contrato';
+    body.innerHTML=`
+      <div class="form-group"><label class="form-label">Projeto / Cliente</label><input class="form-control" type="text" id="f-proj" value="${c.projeto}"/></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tipo</label><select class="form-control" id="f-tipo">${cfg.catsEntrada.map(s=>`<option ${c.tipo===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      </div>
+      <div class="info-box">Isso renomeia o projeto/tipo em todas as ${contratos.filter(x=>x.projeto===c.projeto).length} parcela(s) deste contrato.</div>`;
+    confirm.onclick=()=>{
+      const novoProj=document.getElementById('f-proj').value.trim().toUpperCase();
+      const novoTipo=document.getElementById('f-tipo').value;
+      if(!novoProj) return showToast('Preencha o nome do projeto.','error');
+      const antigoProj=c.projeto;
+      contratos.forEach(x=>{ if(x.projeto===antigoProj){ x.projeto=novoProj; x.tipo=novoTipo; } });
+      sv('rs2_contratos',contratos);closeModal();renderAll();showToast('Contrato atualizado!');
+    };
+  }
+  else if(type==='parcela-edit'){
+    const p = contratos.find(x=>x.id===openModal._editId);
+    if(!p){ closeModal(); return; }
+    title.textContent='✎ Editar Parcela';
+    body.innerHTML=`
+      <div class="form-group"><label class="form-label">Projeto</label><input class="form-control" type="text" value="${p.projeto}" disabled/></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Valor da parcela</label><input class="form-control" type="number" id="f-pvalor" value="${p.valor}"/></div>
+        <div class="form-group"><label class="form-label">Previsão (ex: AGO/26)</label><input class="form-control" type="text" id="f-pprev" value="${p.prev||''}"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Status</label><select class="form-control" id="f-pstatus"><option ${p.status==='Em aberto'?'selected':''}>Em aberto</option><option ${p.status==='Recebido'?'selected':''}>Recebido</option></select></div>
+      <div class="form-group"><label class="form-label">Observação</label><input class="form-control" type="text" id="f-pobs" value="${p.obs||''}"/></div>`;
+    confirm.onclick=()=>{
+      const valor=parseFloat(document.getElementById('f-pvalor').value);
+      const prev=document.getElementById('f-pprev').value;
+      const status=document.getElementById('f-pstatus').value;
+      const obs=document.getElementById('f-pobs').value;
+      if(!valor||isNaN(valor)) return showToast('Informe o valor da parcela.','error');
+      Object.assign(p,{valor,prev,status,obs});
+      sv('rs2_contratos',contratos);closeModal();renderAll();showToast('Parcela atualizada!');
     };
   }
   else if(type==='saida'){
@@ -1929,7 +2692,7 @@ function openModal(type){
       const tipo=document.getElementById('f-stipo').value;
       const desc=document.getElementById('f-sdesc').value.trim();
       if(!desc||!val||isNaN(val))return showToast('Preencha todos os campos.','error');
-      saidas.push({id:nextId++,mes,cat,desc,val,tipo});
+      saidas.push({id:nextId++,tipo_saida:'operacional',mes,cat,desc,val,tipo});
       sv('rs2_saidas',saidas);closeModal();renderAll();showToast('Saída salva com sucesso!');
     };
   }
@@ -1946,7 +2709,7 @@ function openModal(type){
       const atual=parseFloat(document.getElementById('f-catual').value)||0;
       const meta=parseFloat(document.getElementById('f-cmeta').value)||0;
       if(!nome)return showToast('Digite o nome.','error');
-      clientes.push({id:nextId++,nome,atual,meta,servico:'Cliente Fixo',status:'Ativo',obs:''});
+      clientes.push({id:nextId++,nome,atual,meta,liquido:0,tipos:['Fixo'],servicos:[],status:'Ativo',obs:''});
       sv('rs2_clientes',clientes);closeModal();renderAll();showToast('Cliente fixo adicionado!');
     };
   }
@@ -1955,23 +2718,26 @@ function openModal(type){
     const c = isEdit ? clientes.find(x=>x.id===openModal._editId) : null;
     title.textContent = isEdit ? '✎ Editar Cliente' : '👥 Novo Cliente';
 
-    const servicoOpts = cfg.catsEntrada.map(s=>`<option ${c&&c.servico===s?'selected':''}>${s}</option>`).join('');
     const statusOpts = ['Ativo','Inativo','Potencial'].map(s=>`<option ${c&&c.status===s?'selected':''}>${s}</option>`).join('');
+    const tiposHtml = cfg.tiposCliente.map(t=>`<button type="button" class="chip-select ${(c&&c.tipos&&c.tipos.includes(t))?'active':''}" data-group="tipos" data-value="${t}">${t}</button>`).join('');
+    const servicosHtml = cfg.servicosPrestados.map(s=>`<button type="button" class="chip-select ${(c&&c.servicos&&c.servicos.includes(s))?'active':''}" data-group="servicos" data-value="${s}">${s}</button>`).join('');
 
     body.innerHTML=`
       <div class="form-group">
         <label class="form-label">Nome do cliente</label>
         <input class="form-control" type="text" id="f-cnome" value="${c?c.nome:''}"/>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Tipo de serviço</label>
-          <select class="form-control" id="f-cservico">${servicoOpts}</select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Status</label>
-          <select class="form-control" id="f-cstatus">${statusOpts}</select>
-        </div>
+      <div class="form-group">
+        <label class="form-label">Tipos (pode marcar mais de um)</label>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${tiposHtml}</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Serviços prestados (pode marcar mais de um)</label>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${servicosHtml}</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select class="form-control" id="f-cstatus">${statusOpts}</select>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -1984,28 +2750,165 @@ function openModal(type){
         </div>
       </div>
       <div class="form-group">
+        <label class="form-label">Valor líquido/mês (após fornecedores)</label>
+        <input class="form-control" type="number" id="f-cliquido" value="${c&&c.liquido?c.liquido:''}" placeholder="Ex: 230 (o que fica no seu bolso)"/>
+        <div style="font-size:11px;color:#555;margin-top:4px">Deixe em branco se não há repasse para fornecedores</div>
+      </div>
+      <div class="form-group">
         <label class="form-label">Observação</label>
         <input class="form-control" type="text" id="f-cobs" value="${c?c.obs||'':''}"/>
       </div>`;
 
+    body.querySelectorAll('.chip-select').forEach(chip=>{
+      chip.addEventListener('click', ()=> chip.classList.toggle('active'));
+    });
+
     confirm.onclick=()=>{
       const nome    = document.getElementById('f-cnome').value.trim().toUpperCase();
-      const servico = document.getElementById('f-cservico').value;
+      const tipos    = [...body.querySelectorAll('.chip-select[data-group="tipos"].active')].map(b=>b.dataset.value);
+      const servicos = [...body.querySelectorAll('.chip-select[data-group="servicos"].active')].map(b=>b.dataset.value);
       const status  = document.getElementById('f-cstatus').value;
       const atual   = parseFloat(document.getElementById('f-catual').value)||0;
       const meta    = parseFloat(document.getElementById('f-cmeta').value)||0;
+      const liquido = parseFloat(document.getElementById('f-cliquido').value)||0;
       const obs     = document.getElementById('f-cobs').value.trim();
       if(!nome) return showToast('Digite o nome do cliente.','error');
       if(isEdit&&c){
-        Object.assign(c,{nome,servico,status,atual,meta,obs});
+        Object.assign(c,{nome,tipos,servicos,status,atual,meta,liquido,obs});
         showToast('Cliente atualizado!');
       } else {
-        clientes.push({id:nextId++,nome,servico,status,atual,meta,obs});
+        clientes.push({id:nextId++,nome,tipos,servicos,status,atual,meta,liquido,obs});
         showToast('Cliente adicionado!');
       }
       sv('rs2_clientes',clientes);
       closeModal();
       renderAll();
+    };
+  }
+  else if(type==='fornecedor'||type==='fornecedor-edit'){
+    const isEdit = type==='fornecedor-edit';
+    const f = isEdit ? fornecedores.find(x=>x.id===openModal._editId) : null;
+    title.textContent = isEdit ? '✎ Editar Fornecedor' : '🤝 Novo Fornecedor';
+
+    const fEsps = f ? (f.especialidades||(f.especialidade?[f.especialidade]:[])) : [];
+    const espHtml = cfg.tiposFornecedor.map(e=>`<button type="button" class="chip-select ${fEsps.includes(e)?'active':''}" data-group="especialidades" data-value="${e}">${e}</button>`).join('');
+
+    body.innerHTML = `
+      <div class="form-group">
+        <label class="form-label">Nome</label>
+        <input class="form-control" type="text" id="f-fnome" value="${f?f.nome:''}" placeholder="Ex: Lucas Oliveira"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Especialidades (pode marcar mais de uma)</label>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${espHtml}</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contato (WhatsApp ou e-mail)</label>
+        <input class="form-control" type="text" id="f-fcontato" value="${f?f.contato:''}" placeholder="Ex: (87) 99999-9999"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observação</label>
+        <input class="form-control" type="text" id="f-fobs" value="${f?f.obs:''}" placeholder="Ex: cobra por diária, preferência de pagamento..."/>
+      </div>`;
+
+    body.querySelectorAll('.chip-select').forEach(chip=>{
+      chip.addEventListener('click', ()=> chip.classList.toggle('active'));
+    });
+
+    confirm.onclick = () => {
+      const nome    = document.getElementById('f-fnome').value.trim();
+      const especialidades = [...body.querySelectorAll('.chip-select[data-group="especialidades"].active')].map(b=>b.dataset.value);
+      const contato = document.getElementById('f-fcontato').value.trim();
+      const obs     = document.getElementById('f-fobs').value.trim();
+      if(!nome) return showToast('Digite o nome do fornecedor.','error');
+      if(isEdit&&f){
+        Object.assign(f,{nome,especialidades,contato,obs});
+        showToast('Fornecedor atualizado!');
+      } else {
+        fornecedores.push({id:nextId++,nome,especialidades,contato,obs});
+        showToast('Fornecedor adicionado!');
+      }
+      sv('rs2_fornecedores', fornecedores);
+      closeModal();
+      renderAll();
+    };
+  }
+  else if(type==='custo-projeto'){
+    title.textContent = '👥 Novo Custo de Projeto';
+
+    const mOptsC = cfg.meses.map(m=>`<option>${m}</option>`).join('');
+    const fornOpts = fornecedores.map(f=>`<option value="${f.id}">${f.nome} — ${(f.especialidades||(f.especialidade?[f.especialidade]:[])).join(', ')}</option>`).join('');
+    const cliOpts = ['(Sem vínculo)', ...clientes.map(c=>c.nome),
+      ...[...new Set(contratos.map(c=>c.projeto))]
+    ].map(n=>`<option>${n}</option>`).join('');
+
+    body.innerHTML = `
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Mês</label>
+          <select class="form-control" id="f-cmes">${mOptsC}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data do pagamento</label>
+          <input class="form-control" type="date" id="f-cdata" value="${new Date().toISOString().split('T')[0]}"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Fornecedor</label>
+          <select class="form-control" id="f-cforn">${fornOpts}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Função neste projeto</label>
+          <select class="form-control" id="f-cfuncao"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Valor (R$)</label>
+          <input class="form-control" type="number" id="f-cval" placeholder="0" min="0" step="0.01"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cliente / Projeto vinculado</label>
+          <select class="form-control" id="f-ccli">${cliOpts}</select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrição</label>
+        <input class="form-control" type="text" id="f-cdesc" placeholder="Ex: Produção mensal julho, Cobertura casamento..."/>
+      </div>`;
+
+    const atualizarFuncaoOpts = () => {
+      const forn = fornecedores.find(f=>f.id===parseInt(document.getElementById('f-cforn').value));
+      const esps = forn ? (forn.especialidades||(forn.especialidade?[forn.especialidade]:[])) : [];
+      document.getElementById('f-cfuncao').innerHTML = esps.map(e=>`<option>${e}</option>`).join('');
+    };
+    document.getElementById('f-cforn').addEventListener('change', atualizarFuncaoOpts);
+    atualizarFuncaoOpts();
+
+    confirm.onclick = () => {
+      const mes      = document.getElementById('f-cmes').value;
+      const data     = document.getElementById('f-cdata').value || null;
+      const fornId   = parseInt(document.getElementById('f-cforn').value);
+      const funcao   = document.getElementById('f-cfuncao').value;
+      const val      = parseFloat(document.getElementById('f-cval').value);
+      const cli      = document.getElementById('f-ccli').value;
+      const desc     = document.getElementById('f-cdesc').value.trim();
+      if(!val||isNaN(val)) return showToast('Informe o valor.','error');
+      saidas.push({
+        id: nextId++,
+        tipo_saida: 'projeto',
+        mes, data,
+        fornecedorId: fornId,
+        funcao,
+        clienteVinculado: cli==='(Sem vínculo)' ? null : cli,
+        desc, val,
+        status: 'Pago'
+      });
+      sv('rs2_saidas', saidas);
+      closeModal();
+      renderAll();
+      showToast('Custo de projeto registrado!');
     };
   }
 
@@ -2017,7 +2920,7 @@ function closeModal(){document.getElementById('modal-overlay').classList.remove(
 // ═══════════════════════════════════════════
 // NAVEGAÇÃO
 // ═══════════════════════════════════════════
-const PAGE_TITLES={dashboard:'Dashboard',entradas:'Entradas',contratos:'Contratos & Parcelas',saidas:'Saídas',meta:'Meta Renda Fixa',clientes:'Clientes',historico:'Histórico',config:'Configurações'};
+const PAGE_TITLES={dashboard:'Dashboard',entradas:'Entradas',contratos:'Contratos & Parcelas',saidas:'Saídas',meta:'Meta Renda Fixa',clientes:'Clientes',fornecedores:'Fornecedores',historico:'Histórico',config:'Configurações'};
 
 function goPage(page){
   const current=document.querySelector('.page.active');
@@ -2070,6 +2973,7 @@ function renderAll(){
   renderSaidas();
   renderMeta();
   renderClientes();
+  renderFornecedores();
   renderHistorico();
 }
 
@@ -2118,6 +3022,7 @@ async function inicializar(){
         if (dados.contratos) { _cache['rs2_contratos'] = dados.contratos; }
         if (dados.saidas)    { _cache['rs2_saidas']    = dados.saidas;    }
         if (dados.clientes)  { _cache['rs2_clientes']  = dados.clientes;  }
+        if (dados.fornecedores) { _cache['rs2_fornecedores'] = dados.fornecedores; }
         if (dados.config)    { _cache['rs2_config']    = dados.config;    }
       }
     } catch(err) {
@@ -2126,19 +3031,25 @@ async function inicializar(){
   }
 
   // Carrega estado (agora do cache, que foi populado pelo Firebase ou localStorage)
-  entradas  = ld('rs2_entradas',  ENTRADAS_SEED);
-  contratos = ld('rs2_contratos', CONTRATOS_SEED);
-  saidas    = ld('rs2_saidas',    SAIDAS_SEED);
-  clientes  = ld('rs2_clientes',  CLIENTES_SEED);
+  entradas     = ld('rs2_entradas',     ENTRADAS_SEED);
+  contratos    = ld('rs2_contratos',    CONTRATOS_SEED);
+  saidas       = ld('rs2_saidas',       SAIDAS_SEED);
+  clientes     = ld('rs2_clientes',     CLIENTES_SEED);
+  fornecedores = ld('rs2_fornecedores', FORNECEDORES_SEED);
   cfg       = ld('rs2_config',    CONFIG_SEED);
   cfg       = Object.assign({}, CONFIG_SEED, cfg);
   cfg.coresEntrada = Object.assign({}, CORES_ENTRADA_DEFAULT, cfg.coresEntrada || {});
+  cfg.tiposFornecedor = cfg.tiposFornecedor || CONFIG_SEED.tiposFornecedor;
+  cfg.coresFornecedor = Object.assign({}, CONFIG_SEED.coresFornecedor, cfg.coresFornecedor || {});
+  cfg.tiposCliente = cfg.tiposCliente || CONFIG_SEED.tiposCliente;
+  cfg.servicosPrestados = cfg.servicosPrestados || CONFIG_SEED.servicosPrestados;
 
   nextId = Math.max(100,
     ...entradas.map(e => e.id),
     ...contratos.map(c => c.id),
     ...saidas.map(s => s.id),
-    ...clientes.map(c => c.id)
+    ...clientes.map(c => c.id),
+    ...fornecedores.map(f => f.id)
   ) + 1;
 
   aplicarTema();
