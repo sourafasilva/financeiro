@@ -296,6 +296,7 @@
     <div class="nav-item active" data-page="dashboard"><span class="icon">⬛</span> Dashboard</div>
     <div class="nav-item" data-page="entradas"><span class="icon">💜</span> Entradas</div>
     <div class="nav-item" data-page="contratos"><span class="icon">📋</span> Contratos</div>
+    <div class="nav-item" data-page="clientes"><span class="icon">👥</span> Clientes</div>
     <div class="nav-section">Financeiro</div>
     <div class="nav-item" data-page="saidas"><span class="icon">📤</span> Saídas</div>
     <div class="nav-item" data-page="meta"><span class="icon">🎯</span> Meta Renda Fixa</div>
@@ -431,6 +432,31 @@
           <div class="chart-wrap"><canvas id="chart-meta"></canvas></div>
         </div>
       </div>
+    </div>
+
+    <!-- CLIENTES -->
+    <div class="page" id="page-clientes">
+      <div class="section-header">
+        <div class="section-title">Clientes</div>
+        <button class="btn btn-primary btn-sm" onclick="openModal('cliente')">+ Novo cliente</button>
+      </div>
+      <div class="cards-grid" id="clientes-summary-cards"></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button class="btn btn-ghost btn-sm clientes-filter-btn active" data-status="">Todos</button>
+        <button class="btn btn-ghost btn-sm clientes-filter-btn" data-status="Ativo">Ativos</button>
+        <button class="btn btn-ghost btn-sm clientes-filter-btn" data-status="Inativo">Inativos</button>
+        <button class="btn btn-ghost btn-sm clientes-filter-btn" data-status="Potencial">Potenciais</button>
+      </div>
+      <div class="table-card"><div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>Cliente</th><th>Serviço</th><th>Status</th>
+            <th>Atual/mês</th><th>Meta/mês</th><th>Progresso</th>
+            <th>Observação</th><th>Ações</th>
+          </tr></thead>
+          <tbody id="tb-clientes"></tbody>
+        </table>
+      </div></div>
     </div>
 
     <!-- HISTÓRICO -->
@@ -707,12 +733,13 @@ const SAIDAS_SEED = [
 ];
 
 const CLIENTES_SEED = [
-  {id:1,nome:"DIDIER",atual:450,meta:700,meses:7,servico:"Cliente Fixo"},
-  {id:2,nome:"POINT DO AÇAÍ",atual:359,meta:700,meses:7,servico:"Cliente Fixo"},
-  {id:3,nome:"IDEALTEC",atual:800,meta:1200,meses:5,servico:"Cliente Fixo"},
-  {id:4,nome:"STAFF",atual:300,meta:700,meses:2,servico:"Cliente Fixo"},
-  {id:5,nome:"CASA AVELINO",atual:450,meta:700,meses:2,servico:"Cliente Fixo"},
-  {id:6,nome:"CHEIA DE CHARME",atual:1600,meta:1600,meses:1,servico:"Cliente Fixo"},
+  {id:1,  nome:"DIDIER",            servico:"Cliente Fixo",   status:"Ativo",     atual:450,  meta:700,  obs:"Cliente de longa data"},
+  {id:2,  nome:"POINT DO AÇAÍ",     servico:"Cliente Fixo",   status:"Ativo",     atual:380,  meta:700,  obs:""},
+  {id:3,  nome:"IDEALTEC",          servico:"Cliente Fixo",   status:"Ativo",     atual:800,  meta:1200, obs:"Inclui Idealtabacaria"},
+  {id:4,  nome:"STAFF",             servico:"Cliente Fixo",   status:"Ativo",     atual:300,  meta:700,  obs:"Tráfego pago CFTV"},
+  {id:5,  nome:"CASA AVELINO",      servico:"Cliente Fixo",   status:"Inativo",   atual:0,    meta:450,  obs:"Pausou o serviço"},
+  {id:6,  nome:"CHEIA DE CHARME",   servico:"Cliente Fixo",   status:"Inativo",   atual:0,    meta:1600, obs:"Ficou apenas 1 mês"},
+  {id:7,  nome:"FARMÁCIA PESQUEIRA",servico:"Projeto Avulso", status:"Potencial", atual:0,    meta:800,  obs:"Vídeo de inauguração previsto"},
 ];
 
 // ═══════════════════════════════════════════
@@ -815,12 +842,8 @@ const R = v => 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:
 const sumBy = (arr,key,f={}) => arr.filter(e=>Object.entries(f).every(([k,v])=>e[k]===v)).reduce((s,e)=>s+Number(e[key]||0),0);
 
 function catBadge(cat){
-  const map = {
-    'Cliente Fixo':'badge-purple','FOTOP/Esportivo':'badge-purple',
-    'Evento Social':'badge-green','Variável Avulso':'badge-yellow',
-    'Renda Familiar':'badge-gray','Venda Equipamento':'badge-yellow',
-  };
-  return map[cat]||'badge-gray';
+  const cor = (cfg.coresEntrada && cfg.coresEntrada[cat]) || '#8B00FF';
+  return `<span class="badge" style="background:${cor}22;color:${cor};border:1px solid ${cor}44">${cat}</span>`;
 }
 
 function fmtData(data){
@@ -1166,7 +1189,13 @@ function renderDashboard(){
   };
   doughnutChart = new Chart(ctx2,{
     type:'doughnut',
-    data:{labels:['Cliente Fixo','FOTOP','Eventos','Variável','Familiar'],datasets:[{data:[fixaAcum,fotopAcum,evAcum,varAcum,sabAcum],backgroundColor:[cor,aLight,'#00C864','#FFB800','#555'],borderWidth:0,hoverOffset:6}]},
+    data:{labels:['Cliente Fixo','FOTOP','Eventos','Variável','Familiar'],datasets:[{data:[fixaAcum,fotopAcum,evAcum,varAcum,sabAcum],backgroundColor:[
+      (cfg.coresEntrada&&cfg.coresEntrada['Cliente Fixo'])||cor,
+      (cfg.coresEntrada&&cfg.coresEntrada['FOTOP/Esportivo'])||aLight,
+      (cfg.coresEntrada&&cfg.coresEntrada['Evento Social'])||'#00C864',
+      (cfg.coresEntrada&&cfg.coresEntrada['Variável Avulso'])||'#FFB800',
+      (cfg.coresEntrada&&cfg.coresEntrada['Renda Familiar'])||'#555'
+    ],borderWidth:0,hoverOffset:6}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'72%',plugins:{legend:{position:'bottom',labels:{color:'#999',font:{size:11},padding:10}},tooltip:{callbacks:{label:c=>` ${c.label}: ${R(c.raw)}`}}}},
     plugins:[centerTextPlugin]
   });
@@ -1176,7 +1205,7 @@ function renderDashboard(){
     <tr><td><span class="badge badge-gray">${e.mes}</span></td>
     <td style="color:var(--text3);font-size:12px">${fmtData(e.data)}</td>
     <td style="font-weight:600">${e.cliente}</td>
-    <td><span class="badge ${catBadge(e.cat)}">${e.cat}</span></td>
+    <td>${catBadge(e.cat)}</td>
     <td class="money">${R(e.val)}</td></tr>`).join('');
 }
 
@@ -1198,12 +1227,84 @@ function renderEntradas(){
     <tr><td><span class="badge badge-gray">${e.mes}</span></td>
     <td style="color:var(--text3);font-size:12px">${fmtData(e.data)}</td>
     <td style="font-weight:600">${e.cliente}</td>
-    <td><span class="badge ${catBadge(e.cat)}">${e.cat}</span></td>
+    <td>${catBadge(e.cat)}</td>
     <td class="money">${R(e.val)}</td>
-    <td><div class="row-actions"><button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delEntrada(${e.id}))">✕</button></div></td></tr>`).join('')
+    <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="editEntrada(${e.id})">✎</button><button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delEntrada(${e.id}))">✕</button></div></td></tr>`).join('')
     ||(q?`<tr><td colspan="6"><div class="empty"><div class="empty-icon">🔍</div>Nenhum resultado para "${searchEl.value}"</div></td></tr>`:'<tr><td colspan="6"><div class="empty"><div class="empty-icon">📭</div>Nenhum lançamento</div></td></tr>');
 }
 function delEntrada(id){entradas=entradas.filter(e=>e.id!==id);sv('rs2_entradas',entradas);renderAll();showToast('Removido.','info');}
+
+function editEntrada(id){
+  const e = entradas.find(x=>x.id===id);
+  if(!e) return;
+
+  const title   = document.getElementById('modal-title');
+  const body    = document.getElementById('modal-body');
+  const confirm = document.getElementById('modal-confirm');
+
+  title.textContent = '✎ Editar Lançamento';
+
+  const mOpts = cfg.meses.map(m=>`<option ${e.mes===m?'selected':''}>${m}</option>`).join('');
+  const cOpts = cfg.catsEntrada.map(c=>`<option ${e.cat===c?'selected':''}>${c}</option>`).join('');
+
+  body.innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Data do pagamento</label>
+      <input class="form-control" type="date" id="f-data" value="${e.data||''}"/>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Mês</label>
+        <select class="form-control" id="f-mes">${mOpts}</select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Valor (R$)</label>
+        <input class="form-control" type="number" id="f-val" value="${e.val}"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Cliente / Descrição</label>
+      <input class="form-control" type="text" id="f-cli" value="${e.cliente}"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Categoria</label>
+      <select class="form-control" id="f-cat">${cOpts}</select>
+    </div>`;
+
+  document.getElementById('f-data').addEventListener('change', function(){
+    const d = new Date(this.value+'T00:00:00');
+    const meses = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+    const mesAno = meses[d.getMonth()]+'/'+String(d.getFullYear()).slice(2);
+    if(!cfg.meses.includes(mesAno)){
+      cfg.meses.push(mesAno);
+      cfg.meses.sort((a,b)=>{
+        const mMap = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
+        const [mA,aA] = [a.slice(0,3),parseInt(a.slice(4))];
+        const [mB,aB] = [b.slice(0,3),parseInt(b.slice(4))];
+        return aA!==aB ? aA-aB : mMap[mA]-mMap[mB];
+      });
+      sv('rs2_config', cfg);
+    }
+    const sel = document.getElementById('f-mes');
+    sel.innerHTML = cfg.meses.map(m=>`<option ${m===mesAno?'selected':''}>${m}</option>`).join('');
+  });
+
+  confirm.onclick = () => {
+    const data = document.getElementById('f-data').value || null;
+    const mes  = document.getElementById('f-mes').value;
+    const val  = parseFloat(document.getElementById('f-val').value);
+    const cli  = document.getElementById('f-cli').value.trim().toUpperCase();
+    const cat  = document.getElementById('f-cat').value;
+    if(!cli||!val||isNaN(val)) return showToast('Preencha todos os campos.','error');
+    Object.assign(e, { data, mes, val, cliente: cli, cat });
+    sv('rs2_entradas', entradas);
+    closeModal();
+    renderAll();
+    showToast('Lançamento atualizado!');
+  };
+
+  document.getElementById('modal-overlay').classList.add('open');
+}
 
 // ═══════════════════════════════════════════
 // RENDER CONTRATOS
@@ -1216,7 +1317,7 @@ function renderContratos(){
     <div class="card green" style="animation-delay:60ms"><div class="card-dot"></div><div class="card-label">Já Recebido</div><div class="card-value">${R(rec.reduce((s,c)=>s+c.valor,0))}</div><div class="card-sub">${rec.length} parcelas</div></div>`;
   document.getElementById('tb-contratos').innerHTML=contratos.map(c=>`
     <tr><td style="font-weight:600">${c.projeto}</td>
-    <td><span class="badge ${catBadge(c.tipo)}">${c.tipo}</span></td>
+    <td>${catBadge(c.tipo)}</td>
     <td class="money">${R(c.total)}</td><td style="color:var(--text2)">${c.parcela}</td>
     <td class="money">${R(c.valor)}</td>
     <td><span class="badge ${c.status==='Recebido'?'badge-green':'badge-yellow'}">${c.status}</span></td>
@@ -1269,8 +1370,9 @@ function renderMeta(){
   const mediaFixa=meses.length?Math.round(fixaAcum/meses.length):0;
   const pct=Math.min(Math.round(mediaFixa/META*100),100);
   const falta=Math.max(META-mediaFixa,0);
-  const fixaAtual=clientes.reduce((s,c)=>s+c.atual,0);
-  const fixaMeta=clientes.reduce((s,c)=>s+c.meta,0);
+  const clientesFixos=clientes.filter(c=>c.servico==='Cliente Fixo');
+  const fixaAtual=clientesFixos.reduce((s,c)=>s+c.atual,0);
+  const fixaMeta=clientesFixos.reduce((s,c)=>s+c.meta,0);
 
   document.getElementById('meta-cards').innerHTML=`
     <div class="meta-card">
@@ -1293,11 +1395,11 @@ function renderMeta(){
       <div style="margin-top:4px;font-size:12px;color:var(--green)">+${R(fixaMeta-fixaAtual)}/mês se atingir todas as metas</div>
     </div>`;
 
-  document.getElementById('clientes-meta-list').innerHTML=clientes.map(c=>`
+  document.getElementById('clientes-meta-list').innerHTML=clientes.filter(c=>c.servico==='Cliente Fixo').map(c=>`
     <div class="cliente-row">
       <div style="flex:1">
         <div style="font-size:13px;font-weight:600;color:#fff">${c.nome}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${c.meses} ${c.meses===1?'mês':'meses'} ativo em 2026</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${c.status||''}</div>
         <div class="progress-wrap" style="width:120px;margin-top:6px">
           <div class="progress-fill" style="width:${Math.min(Math.round(c.atual/c.meta*100),100)}%"></div>
         </div>
@@ -1324,6 +1426,182 @@ function renderMeta(){
   });
 }
 function delCliente(id){clientes=clientes.filter(c=>c.id!==id);sv('rs2_clientes',clientes);renderAll();showToast('Cliente removido.','info');}
+
+// ═══════════════════════════════════════════
+// RENDER CLIENTES
+// ═══════════════════════════════════════════
+function editCliente(id){
+  openModal._editId = id;
+  openModal('cliente-edit');
+}
+
+function getResumoCliente(nomeCliente){
+  const entradasCliente = entradas.filter(e=>
+    e.cliente.includes(nomeCliente) || nomeCliente.includes(e.cliente)
+  );
+
+  const porMes = {};
+  entradasCliente.forEach(e=>{ porMes[e.mes] = (porMes[e.mes]||0) + e.val; });
+
+  const porAno = {};
+  entradasCliente.forEach(e=>{
+    const ano = '20' + e.mes.slice(4);
+    porAno[ano] = (porAno[ano]||0) + e.val;
+  });
+
+  const total = entradasCliente.reduce((s,e)=>s+e.val,0);
+  const totalLancamentos = entradasCliente.length;
+
+  return { porMes, porAno, total, totalLancamentos, entradas: entradasCliente };
+}
+
+function toggleResumoCliente(id){
+  const aberto = document.getElementById('resumo-cliente-row');
+  if(aberto){
+    const eraOMesmo = aberto.dataset.clienteId === String(id);
+    aberto.remove();
+    if(eraOMesmo) return;
+  }
+
+  const c = clientes.find(x=>x.id===id);
+  if(!c) return;
+
+  const resumo = getResumoCliente(c.nome);
+
+  const mesesOrdenados = Object.keys(resumo.porMes).sort((a,b)=>{
+    const mMap = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
+    const [mA,aA] = [a.slice(0,3),parseInt(a.slice(4))];
+    const [mB,aB] = [b.slice(0,3),parseInt(b.slice(4))];
+    return aA!==aB ? aA-aB : mMap[mA]-mMap[mB];
+  });
+
+  const tabelaMeses = mesesOrdenados.map(mes=>`
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+      <span style="font-size:12px;color:#888">${mes}</span>
+      <span style="font-size:12px;font-weight:600;color:#fff">${R(resumo.porMes[mes])}</span>
+    </div>`).join('');
+
+  const tabelaAnos = Object.entries(resumo.porAno)
+    .sort(([a],[b])=>a.localeCompare(b))
+    .map(([ano,val])=>`
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+        <span style="font-size:12px;color:#888">${ano}</span>
+        <span style="font-size:12px;font-weight:700;color:var(--accent-light)">${R(val)}</span>
+      </div>`).join('');
+
+  const cor = (cfg.coresEntrada && cfg.coresEntrada[c.servico]) || '#8B00FF';
+
+  const html = `
+    <tr id="resumo-cliente-row" data-cliente-id="${id}">
+      <td colspan="8" style="padding:0;background:rgba(0,0,0,0.3)">
+        <div style="padding:20px;border-top:2px solid ${cor}33;border-bottom:1px solid rgba(255,255,255,0.06)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div style="font-size:13px;font-weight:700;color:#fff">
+              📊 ${c.nome} — Histórico de Receita
+            </div>
+            <div style="display:flex;gap:16px">
+              <div style="text-align:center">
+                <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px">Total gerado</div>
+                <div style="font-size:20px;font-weight:800;color:#fff">${R(resumo.total)}</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px">Lançamentos</div>
+                <div style="font-size:20px;font-weight:800;color:#fff">${resumo.totalLancamentos}</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px">
+            <div>
+              <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Por mês</div>
+              ${mesesOrdenados.length>0 ? tabelaMeses : '<div style="font-size:12px;color:#444">Nenhum lançamento encontrado</div>'}
+            </div>
+            <div>
+              <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Por ano</div>
+              ${Object.keys(resumo.porAno).length>0 ? tabelaAnos : '<div style="font-size:12px;color:#444">—</div>'}
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>`;
+
+  const linhaCliente = document.querySelector(`[data-cliente-id-row="${id}"]`);
+  if(linhaCliente) linhaCliente.insertAdjacentHTML('afterend', html);
+}
+
+function renderClientes(){
+  const ativos     = clientes.filter(c=>c.status==='Ativo');
+  const inativos   = clientes.filter(c=>c.status==='Inativo');
+  const potenciais = clientes.filter(c=>c.status==='Potencial');
+  const receitaAtual = ativos.reduce((s,c)=>s+(c.atual||0),0);
+  const receitaMeta  = ativos.reduce((s,c)=>s+(c.meta||0),0);
+
+  document.getElementById('clientes-summary-cards').innerHTML = `
+    <div class="card green" style="animation-delay:0ms">
+      <div class="card-dot"></div>
+      <div class="card-label">Clientes Ativos</div>
+      <div class="card-value">${ativos.length}</div>
+      <div class="card-sub">${R(receitaAtual)}/mês atual</div>
+    </div>
+    <div class="card" style="animation-delay:60ms">
+      <div class="card-dot"></div>
+      <div class="card-label">Receita Potencial</div>
+      <div class="card-value">${R(receitaMeta)}</div>
+      <div class="card-sub">se todos atingirem a meta</div>
+    </div>
+    <div class="card yellow" style="animation-delay:120ms">
+      <div class="card-dot"></div>
+      <div class="card-label">Inativos</div>
+      <div class="card-value">${inativos.length}</div>
+      <div class="card-sub">clientes a retomar</div>
+    </div>
+    <div class="card" style="animation-delay:180ms">
+      <div class="card-dot"></div>
+      <div class="card-label">Potenciais</div>
+      <div class="card-value">${potenciais.length}</div>
+      <div class="card-sub">em negociação</div>
+    </div>`;
+
+  const filtroAtivo  = document.querySelector('.clientes-filter-btn.active');
+  const statusFiltro = filtroAtivo ? filtroAtivo.dataset.status : '';
+  const lista = statusFiltro ? clientes.filter(c=>c.status===statusFiltro) : clientes;
+
+  const statusBadge = { 'Ativo':'badge-green', 'Inativo':'badge-red', 'Potencial':'badge-yellow' };
+
+  document.getElementById('tb-clientes').innerHTML = lista.map(c=>{
+    const pct = c.meta>0 ? Math.min(Math.round((c.atual||0)/c.meta*100),100) : 0;
+    return `<tr data-cliente-id-row="${c.id}" onclick="toggleResumoCliente(${c.id})" style="cursor:pointer" title="Clique para ver o histórico de receita">
+      <td style="font-weight:700;color:#fff">
+        ${c.nome}
+        <span style="font-size:10px;color:#444;margin-left:6px">▼</span>
+      </td>
+      <td>${catBadge(c.servico||'')}</td>
+      <td><span class="badge ${statusBadge[c.status]||'badge-gray'}">${c.status}</span></td>
+      <td style="font-weight:600;color:#fff">${c.atual>0?R(c.atual):'—'}</td>
+      <td style="color:var(--text2)">${R(c.meta)}</td>
+      <td style="min-width:100px">
+        <div class="progress-wrap" style="margin:0">
+          <div class="progress-fill" style="width:${pct}%"></div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">${pct}%</div>
+      </td>
+      <td style="color:var(--text3);font-size:12px">${c.obs||'—'}</td>
+      <td onclick="event.stopPropagation()">
+        <div class="row-actions">
+          <button class="btn btn-ghost btn-sm" onclick="editCliente(${c.id})">✎</button>
+          <button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delCliente(${c.id}))">✕</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8"><div class="empty"><div class="empty-icon">👥</div>Nenhum cliente</div></td></tr>';
+
+  document.querySelectorAll('.clientes-filter-btn').forEach(btn=>{
+    btn.onclick = () => {
+      document.querySelectorAll('.clientes-filter-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderClientes();
+    };
+  });
+}
 
 // ═══════════════════════════════════════════
 // RENDER HISTÓRICO
@@ -1360,11 +1638,18 @@ function renderConfig(){
   document.getElementById('cfg-meta-total').value=cfg.metaTotal||8000;
 
   // Categorias de entrada
-  document.getElementById('cats-entrada-list').innerHTML=cfg.catsEntrada.map((c,i)=>`
+  document.getElementById('cats-entrada-list').innerHTML=cfg.catsEntrada.map((c,i)=>{
+    const corAtual = (cfg.coresEntrada && cfg.coresEntrada[c]) || '#8B00FF';
+    return `
     <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+      <input type="color" value="${corAtual}"
+        title="Cor da categoria"
+        style="width:34px;height:34px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;padding:2px;flex-shrink:0"
+        onchange="updateCorCategoria('${c}', this.value)"/>
       <input class="config-input" style="flex:1" value="${c}" onchange="renameCatEntrada(${i},this.value)"/>
       <button class="btn btn-danger btn-sm" onclick="removeCatEntrada(${i})">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   // Categorias de saída
   document.getElementById('cats-saida-list').innerHTML=cfg.catsSaida.map((c,i)=>`
@@ -1410,7 +1695,18 @@ function renameCatEntrada(i,novo){
   const antigo=cfg.catsEntrada[i];
   cfg.catsEntrada[i]=novo;
   entradas.forEach(e=>{if(e.cat===antigo)e.cat=novo;});
+  if(cfg.coresEntrada && cfg.coresEntrada[antigo]){
+    cfg.coresEntrada[novo]=cfg.coresEntrada[antigo];
+    delete cfg.coresEntrada[antigo];
+  }
   sv('rs2_config',cfg);sv('rs2_entradas',entradas);
+  renderAll();
+}
+function updateCorCategoria(cat,cor){
+  if(!cfg.coresEntrada) cfg.coresEntrada={};
+  cfg.coresEntrada[cat]=cor;
+  sv('rs2_config',cfg);
+  renderAll();
 }
 function removeCatEntrada(i){
   if(!confirm('Remover categoria?'))return;
@@ -1484,10 +1780,10 @@ function exportarExcel(){
   wsH['!cols']=[{wch:10},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12}];
   XLSX.utils.book_append_sheet(wb,wsH,'Histórico 2025-2026');
 
-  // Aba Clientes Fixos
-  const wsF=XLSX.utils.json_to_sheet(clientes.map(c=>({'Cliente':c.nome,'Valor Atual/Mês':c.atual,'Meta/Mês':c.meta,'Diferença':c.meta-c.atual,'Meses Ativo':c.meses})));
-  wsF['!cols']=[{wch:24},{wch:16},{wch:12},{wch:12},{wch:14}];
-  XLSX.utils.book_append_sheet(wb,wsF,'Meta Renda Fixa');
+  // Aba Clientes
+  const wsF=XLSX.utils.json_to_sheet(clientes.map(c=>({'Cliente':c.nome,'Serviço':c.servico||'','Status':c.status||'','Valor Atual/Mês':c.atual,'Meta/Mês':c.meta,'Diferença':c.meta-c.atual,'Observação':c.obs||''})));
+  wsF['!cols']=[{wch:24},{wch:18},{wch:12},{wch:16},{wch:12},{wch:12},{wch:30}];
+  XLSX.utils.book_append_sheet(wb,wsF,'Clientes');
 
   const now=new Date();
   const nome=`${cfg.nome||'RafaSilva'}_Financeiro_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`;
@@ -1649,8 +1945,66 @@ function openModal(type){
       const atual=parseFloat(document.getElementById('f-catual').value)||0;
       const meta=parseFloat(document.getElementById('f-cmeta').value)||0;
       if(!nome)return showToast('Digite o nome.','error');
-      clientes.push({id:nextId++,nome,atual,meta,meses:1});
+      clientes.push({id:nextId++,nome,atual,meta,servico:'Cliente Fixo',status:'Ativo',obs:''});
       sv('rs2_clientes',clientes);closeModal();renderAll();showToast('Cliente fixo adicionado!');
+    };
+  }
+  else if(type==='cliente'||type==='cliente-edit'){
+    const isEdit = type==='cliente-edit';
+    const c = isEdit ? clientes.find(x=>x.id===openModal._editId) : null;
+    title.textContent = isEdit ? '✎ Editar Cliente' : '👥 Novo Cliente';
+
+    const servicoOpts = cfg.catsEntrada.map(s=>`<option ${c&&c.servico===s?'selected':''}>${s}</option>`).join('');
+    const statusOpts = ['Ativo','Inativo','Potencial'].map(s=>`<option ${c&&c.status===s?'selected':''}>${s}</option>`).join('');
+
+    body.innerHTML=`
+      <div class="form-group">
+        <label class="form-label">Nome do cliente</label>
+        <input class="form-control" type="text" id="f-cnome" value="${c?c.nome:''}"/>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tipo de serviço</label>
+          <select class="form-control" id="f-cservico">${servicoOpts}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-control" id="f-cstatus">${statusOpts}</select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Valor atual/mês (R$)</label>
+          <input class="form-control" type="number" id="f-catual" value="${c?c.atual:''}"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Meta ideal/mês (R$)</label>
+          <input class="form-control" type="number" id="f-cmeta" value="${c?c.meta:''}"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observação</label>
+        <input class="form-control" type="text" id="f-cobs" value="${c?c.obs||'':''}"/>
+      </div>`;
+
+    confirm.onclick=()=>{
+      const nome    = document.getElementById('f-cnome').value.trim().toUpperCase();
+      const servico = document.getElementById('f-cservico').value;
+      const status  = document.getElementById('f-cstatus').value;
+      const atual   = parseFloat(document.getElementById('f-catual').value)||0;
+      const meta    = parseFloat(document.getElementById('f-cmeta').value)||0;
+      const obs     = document.getElementById('f-cobs').value.trim();
+      if(!nome) return showToast('Digite o nome do cliente.','error');
+      if(isEdit&&c){
+        Object.assign(c,{nome,servico,status,atual,meta,obs});
+        showToast('Cliente atualizado!');
+      } else {
+        clientes.push({id:nextId++,nome,servico,status,atual,meta,obs});
+        showToast('Cliente adicionado!');
+      }
+      sv('rs2_clientes',clientes);
+      closeModal();
+      renderAll();
     };
   }
 
@@ -1662,7 +2016,7 @@ function closeModal(){document.getElementById('modal-overlay').classList.remove(
 // ═══════════════════════════════════════════
 // NAVEGAÇÃO
 // ═══════════════════════════════════════════
-const PAGE_TITLES={dashboard:'Dashboard',entradas:'Entradas',contratos:'Contratos & Parcelas',saidas:'Saídas',meta:'Meta Renda Fixa',historico:'Histórico',config:'Configurações'};
+const PAGE_TITLES={dashboard:'Dashboard',entradas:'Entradas',contratos:'Contratos & Parcelas',saidas:'Saídas',meta:'Meta Renda Fixa',clientes:'Clientes',historico:'Histórico',config:'Configurações'};
 
 function goPage(page){
   const current=document.querySelector('.page.active');
@@ -1714,6 +2068,7 @@ function renderAll(){
   renderContratos();
   renderSaidas();
   renderMeta();
+  renderClientes();
   renderHistorico();
 }
 
