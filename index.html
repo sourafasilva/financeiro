@@ -360,7 +360,7 @@
       </div>
       <div class="section-header"><div class="section-title">Últimos lançamentos</div></div>
       <div class="table-card"><div class="table-scroll">
-        <table><thead><tr><th>Mês</th><th>Data</th><th>Cliente / Descrição</th><th>Categoria</th><th>Valor</th></tr></thead>
+        <table><thead><tr><th>Mês</th><th>Data</th><th>Cliente</th><th>Categoria</th><th>Valor</th></tr></thead>
         <tbody id="tb-ultimos"></tbody></table>
       </div></div>
     </div>
@@ -382,7 +382,7 @@
         </div>
       </div>
       <div class="table-card"><div class="table-scroll">
-        <table><thead><tr><th>Mês</th><th>Data</th><th>Status</th><th>Cliente / Descrição</th><th>Categoria</th><th>Valor</th><th>Ações</th></tr></thead>
+        <table><thead><tr><th>Mês</th><th>Data</th><th>Status</th><th>Cliente</th><th>Tipo de Serviço</th><th>Categoria</th><th>Valor</th><th>Ações</th></tr></thead>
         <tbody id="tb-entradas"></tbody></table>
       </div></div>
     </div>
@@ -572,6 +572,16 @@
         <div style="display:flex;gap:8px;margin-top:12px">
           <input class="config-input" id="novo-tipo-forn" type="text" placeholder="Ex: Colorista, DJ, Cerimonialista..." style="flex:1"/>
           <button class="btn btn-primary btn-sm" onclick="adicionarTipoFornecedor()">+ Adicionar</button>
+        </div>
+      </div>
+
+      <!-- Tipos de Serviço -->
+      <div class="config-section">
+        <div class="config-section-title">🛠️ Tipos de Serviço</div>
+        <div id="tipos-servico-list"></div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <input class="config-input" id="novo-tipo-servico" type="text" placeholder="Ex: Colorização, Motion Design..." style="flex:1"/>
+          <button class="btn btn-primary btn-sm" onclick="adicionarTipoServico()">+ Adicionar</button>
         </div>
       </div>
 
@@ -942,6 +952,16 @@ const CONFIG_SEED = {
   coresFornecedor: Object.assign({},CORES_FORNECEDOR_DEFAULT),
   tiposCliente: ["Fixo","Avulso","Contrato","Potencial"],
   servicosPrestados: ["Produção de Conteúdo","Tráfego Pago","Cobertura Fotográfica","Cobertura em Vídeo","Projeto Audiovisual","Edição de Vídeo","Edição de Foto","Gestão de Redes Sociais"],
+  tiposServico: ["Tráfego Pago","Edição","Produção de Conteúdo","Cobertura Fotográfica","Cobertura em Vídeo","Gestão de Redes Sociais","Projeto Audiovisual"],
+  coresTipoServico: {
+    "Tráfego Pago":            "#00AAFF",
+    "Edição":                  "#9933FF",
+    "Produção de Conteúdo":    "#8B00FF",
+    "Cobertura Fotográfica":   "#CC00FF",
+    "Cobertura em Vídeo":      "#FF6B00",
+    "Gestão de Redes Sociais": "#00C864",
+    "Projeto Audiovisual":     "#FFB800"
+  },
 };
 
 // ═══════════════════════════════════════════
@@ -1058,6 +1078,14 @@ function migrarDadosAntigos(){
     if(!e.status_pgto){ e.status_pgto='Recebido'; mudouEnt=true; }
   });
   if(mudouEnt) sv('rs2_entradas', entradas);
+
+  // Garante que entradas antigas tenham os campos novos com fallback seguro
+  let mudouCampos=false;
+  entradas.forEach(e=>{
+    if(e.desc===undefined){ e.desc=''; mudouCampos=true; }
+    if(e.tipoServico===undefined){ e.tipoServico=null; mudouCampos=true; }
+  });
+  if(mudouCampos) sv('rs2_entradas', entradas);
 }
 
 // ═══════════════════════════════════════════
@@ -1073,6 +1101,12 @@ function catBadge(cat){
 
 function fornecedorBadge(tipo){
   const cor = (cfg.coresFornecedor && cfg.coresFornecedor[tipo]) || '#555';
+  return `<span class="badge" style="background:${cor}22;color:${cor};border:1px solid ${cor}44">${tipo}</span>`;
+}
+
+function tipoServicoBadge(tipo){
+  if (!tipo) return '<span style="color:#444;font-size:12px">—</span>';
+  const cor = (cfg.coresTipoServico && cfg.coresTipoServico[tipo]) || '#555';
   return `<span class="badge" style="background:${cor}22;color:${cor};border:1px solid ${cor}44">${tipo}</span>`;
 }
 
@@ -1494,7 +1528,10 @@ function renderDashboard(){
   document.getElementById('tb-ultimos').innerHTML = recent.map(e=>`
     <tr><td><span class="badge badge-gray">${e.mes}</span></td>
     <td style="color:var(--text3);font-size:12px">${fmtData(e.data)}</td>
-    <td style="font-weight:600">${e.cliente}</td>
+    <td>
+      <div style="font-weight:600;color:#fff">${e.cliente}</div>
+      ${e.desc ? `<div style="font-size:11px;color:#555;margin-top:2px">${e.desc}</div>` : ''}
+    </td>
     <td>${catBadge(e.cat)}</td>
     <td class="money">${R(e.val)}</td></tr>`).join('');
 }
@@ -1512,19 +1549,23 @@ function renderEntradas(){
   const q=(searchEl.value||'').trim().toLowerCase();
   document.getElementById('search-entradas-clear').classList.toggle('show',q.length>0);
   let data=fil?entradas.filter(e=>e.mes===fil):[...entradas].reverse();
-  if(q) data=data.filter(e=>e.cliente.toLowerCase().includes(q)||e.cat.toLowerCase().includes(q));
+  if(q) data=data.filter(e=>e.cliente.toLowerCase().includes(q)||e.cat.toLowerCase().includes(q)||(e.desc||'').toLowerCase().includes(q)||(e.tipoServico||'').toLowerCase().includes(q));
   document.getElementById('tb-entradas').innerHTML=data.map(e=>{
     const pendente = e.status_pgto==='Pendente';
     return `
     <tr class="${pendente?'pendente':''}"><td><span class="badge badge-gray">${e.mes}</span></td>
     <td style="color:var(--text3);font-size:12px">${fmtData(e.data)}</td>
     <td>${pendente?'<span class="badge badge-yellow">⏳ Pendente</span>':'<span class="badge badge-green">✓ Recebido</span>'}</td>
-    <td style="font-weight:600">${e.cliente}</td>
+    <td>
+      <div style="font-weight:600;color:#fff">${e.cliente}</div>
+      ${e.desc ? `<div style="font-size:11px;color:#555;margin-top:2px">${e.desc}</div>` : ''}
+    </td>
+    <td>${tipoServicoBadge(e.tipoServico)}</td>
     <td>${catBadge(e.cat)}</td>
     <td class="money">${R(e.val)}</td>
     <td><div class="row-actions">${pendente?`<button class="btn btn-success btn-sm" onclick="marcarRecebido(${e.id})">✓ Marcar recebido</button>`:''}<button class="btn btn-ghost btn-sm" onclick="editEntrada(${e.id})">✎</button><button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delEntrada(${e.id}))">✕</button></div></td></tr>`;
   }).join('')
-    ||(q?`<tr><td colspan="7"><div class="empty"><div class="empty-icon">🔍</div>Nenhum resultado para "${searchEl.value}"</div></td></tr>`:'<tr><td colspan="7"><div class="empty"><div class="empty-icon">📭</div>Nenhum lançamento</div></td></tr>');
+    ||(q?`<tr><td colspan="8"><div class="empty"><div class="empty-icon">🔍</div>Nenhum resultado para "${searchEl.value}"</div></td></tr>`:'<tr><td colspan="8"><div class="empty"><div class="empty-icon">📭</div>Nenhum lançamento</div></td></tr>');
 }
 function delEntrada(id){entradas=entradas.filter(e=>e.id!==id);sv('rs2_entradas',entradas);renderAll();showToast('Removido.','info');}
 
@@ -1566,27 +1607,6 @@ function normalizarNome(nome){
     .trim()
     .toUpperCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function criarClienteSeNaoExiste(cli, val){
-  const nomeClienteNormalizado = normalizarNome(cli);
-  if(!nomeClienteNormalizado) return;
-  const clienteExiste = clientes.find(c => normalizarNome(c.nome) === nomeClienteNormalizado);
-  if(!clienteExiste){
-    clientes.push({
-      id: nextId++,
-      nome: (cli||'').toUpperCase(),
-      tipos: [],
-      servicos: [],
-      status: 'Ativo',
-      atual: val,
-      liquido: 0,
-      meta: 0,
-      obs: 'Criado automaticamente via lançamento'
-    });
-    sv('rs2_clientes', clientes);
-    if(typeof showToast==='function') showToast(`Cliente "${(cli||'').toUpperCase()}" adicionado automaticamente.`, 'info');
-  }
 }
 
 function limparClientesDuplicados(){
@@ -1637,6 +1657,8 @@ function editEntrada(id){
   const mOpts = cfg.meses.map(m=>`<option ${e.mes===m?'selected':''}>${m}</option>`).join('');
   const cOpts = cfg.catsEntrada.map(c=>`<option ${e.cat===c?'selected':''}>${c}</option>`).join('');
 
+  const tsOpts = cfg.tiposServico.map(t=>`<option ${e.tipoServico===t?'selected':''}>${t}</option>`).join('');
+
   body.innerHTML = `
     <div class="form-group">
       <label class="form-label">Data do pagamento</label>
@@ -1660,13 +1682,26 @@ function editEntrada(id){
       </div>
     </div>
     <div class="form-group" style="position:relative">
-      <label class="form-label">Cliente / Descrição</label>
+      <label class="form-label">Cliente</label>
       <input class="form-control" type="text" id="f-cli" value="${e.cliente}" autocomplete="off"/>
       <div id="cli-suggestions" style="position:absolute;z-index:100;width:100%;background:#1A1A1A;border:1px solid rgba(139,0,255,0.2);border-radius:8px;margin-top:4px;display:none;max-height:200px;overflow-y:auto"></div>
     </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Tipo de serviço</label>
+        <select class="form-control" id="f-tiposervico">
+          <option value="">— Selecionar —</option>
+          ${tsOpts}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Categoria</label>
+        <select class="form-control" id="f-cat">${cOpts}</select>
+      </div>
+    </div>
     <div class="form-group">
-      <label class="form-label">Categoria</label>
-      <select class="form-control" id="f-cat">${cOpts}</select>
+      <label class="form-label">Descrição (opcional)</label>
+      <input class="form-control" type="text" id="f-desc" value="${e.desc||''}"/>
     </div>`;
 
   document.getElementById('f-data').addEventListener('change', function(){
@@ -1701,9 +1736,11 @@ function editEntrada(id){
     const status_pgto = body.querySelector('.status-pgto-btn.active').dataset.status;
     const val  = parseFloat(document.getElementById('f-val').value);
     const cli  = document.getElementById('f-cli').value.trim().toUpperCase();
+    const tipoServico = document.getElementById('f-tiposervico').value || null;
     const cat  = document.getElementById('f-cat').value;
+    const desc = document.getElementById('f-desc').value.trim();
     if(!cli||!val||isNaN(val)) return showToast('Preencha todos os campos.','error');
-    Object.assign(e, { data, mes, val, cliente: cli, cat, status_pgto });
+    Object.assign(e, { data, mes, val, cliente: cli, tipoServico, cat, desc, status_pgto });
     sv('rs2_entradas', entradas);
     closeModal();
     renderAll();
@@ -2621,6 +2658,8 @@ function renderConfig(){
       </div>`;
   }).join('');
 
+  renderTiposServicoConfig();
+
   // Tipos de cliente
   document.getElementById('tipos-cliente-list').innerHTML = cfg.tiposCliente.map((t,i)=>`
     <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
@@ -2708,6 +2747,66 @@ function adicionarTipoFornecedor(){
   renderConfig();
 }
 
+function renderTiposServicoConfig(){
+  document.getElementById('tipos-servico-list').innerHTML = cfg.tiposServico.map((t, i) => {
+    const cor = (cfg.coresTipoServico && cfg.coresTipoServico[t]) || '#8B00FF';
+    return `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+        <input type="color" value="${cor}"
+          style="width:34px;height:34px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;padding:2px;flex-shrink:0"
+          onchange="updateCorTipoServico('${t}', this.value)"/>
+        <input class="config-input" style="flex:1" value="${t}"
+          onchange="renameTipoServico(${i}, this.value)"/>
+        <button class="btn btn-danger btn-sm" onclick="removeTipoServico(${i})">✕</button>
+      </div>`;
+  }).join('');
+}
+
+function updateCorTipoServico(tipo, cor){
+  if (!cfg.coresTipoServico) cfg.coresTipoServico = {};
+  cfg.coresTipoServico[tipo] = cor;
+  sv('rs2_config', cfg);
+  renderAll();
+}
+
+function renameTipoServico(i, novo){
+  const antigo = cfg.tiposServico[i];
+  cfg.tiposServico[i] = novo;
+  entradas.forEach(e => { if (e.tipoServico === antigo) e.tipoServico = novo; });
+  clientes.forEach(c => {
+    if (c.servicos && c.servicos.includes(antigo)) {
+      c.servicos = c.servicos.map(s => s === antigo ? novo : s);
+    }
+  });
+  if (cfg.coresTipoServico && cfg.coresTipoServico[antigo]) {
+    cfg.coresTipoServico[novo] = cfg.coresTipoServico[antigo];
+    delete cfg.coresTipoServico[antigo];
+  }
+  sv('rs2_config', cfg);
+  sv('rs2_entradas', entradas);
+  sv('rs2_clientes', clientes);
+}
+
+function removeTipoServico(i){
+  if (!confirm('Remover este tipo de serviço?')) return;
+  cfg.tiposServico.splice(i, 1);
+  sv('rs2_config', cfg);
+  renderConfig();
+}
+
+function adicionarTipoServico(){
+  const v = document.getElementById('novo-tipo-servico').value.trim();
+  if (!v) return;
+  if (cfg.tiposServico.includes(v)) {
+    showToast('Esse tipo de serviço já existe.','error');
+    return;
+  }
+  cfg.tiposServico.push(v);
+  sv('rs2_config', cfg);
+  document.getElementById('novo-tipo-servico').value = '';
+  renderConfig();
+}
+
 function renameTipoCliente(i,novo){
   const antigo=cfg.tiposCliente[i];
   cfg.tiposCliente[i]=novo;
@@ -2782,9 +2881,9 @@ function exportarExcel(){
 
   // Aba Entradas
   const wsE=XLSX.utils.json_to_sheet(entradas.map(e=>({
-    'Data':e.data?new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR'):'','Mês':e.mes,'Status':e.status_pgto||'Recebido','Cliente/Descrição':e.cliente,'Categoria':e.cat,'Valor':e.val
+    'Data':e.data?new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR'):'','Mês':e.mes,'Status':e.status_pgto||'Recebido','Cliente':e.cliente,'Tipo de Serviço':e.tipoServico||'','Descrição':e.desc||'','Categoria':e.cat,'Valor':e.val
   })));
-  wsE['!cols']=[{wch:12},{wch:10},{wch:12},{wch:35},{wch:22},{wch:12}];
+  wsE['!cols']=[{wch:12},{wch:10},{wch:12},{wch:24},{wch:20},{wch:30},{wch:22},{wch:12}];
   XLSX.utils.book_append_sheet(wb,wsE,'Entradas 2026');
 
   // Aba Contratos
@@ -2891,6 +2990,7 @@ function openModal(type){
 
   if(type==='entrada'){
     title.textContent='💜 Nova Entrada';
+    const tsOpts = cfg.tiposServico.map(t=>`<option>${t}</option>`).join('');
     body.innerHTML=`
       <div class="form-row">
         <div class="form-group"><label class="form-label">Mês</label><select class="form-control" id="f-mes">${mOpts}</select></div>
@@ -2903,13 +3003,23 @@ function openModal(type){
           <button type="button" class="btn btn-sm status-pgto-btn" data-status="Pendente" style="flex:1">⏳ Pendente</button>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Valor (R$)</label><input class="form-control" type="number" id="f-val" placeholder="0" min="0" step="0.01"/></div>
       <div class="form-group" style="position:relative">
-        <label class="form-label">Cliente / Descrição</label>
+        <label class="form-label">Cliente</label>
         <input class="form-control" type="text" id="f-cli" placeholder="Digite ou selecione um cliente..." autocomplete="off"/>
         <div id="cli-suggestions" style="position:absolute;z-index:100;width:100%;background:#1A1A1A;border:1px solid rgba(139,0,255,0.2);border-radius:8px;margin-top:4px;display:none;max-height:200px;overflow-y:auto"></div>
       </div>
-      <div class="form-group"><label class="form-label">Categoria</label><select class="form-control" id="f-cat">${cOpts}</select></div>`;
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tipo de serviço</label>
+          <select class="form-control" id="f-tiposervico">
+            <option value="">— Selecionar —</option>
+            ${tsOpts}
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Categoria de entrada</label><select class="form-control" id="f-cat">${cOpts}</select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Descrição (opcional)</label><input class="form-control" type="text" id="f-desc" placeholder="Ex: Produção mensal junho, cobertura do aniversário..."/></div>
+      <div class="form-group"><label class="form-label">Valor (R$)</label><input class="form-control" type="number" id="f-val" placeholder="0" min="0" step="0.01"/></div>`;
     document.getElementById('f-data').value = new Date().toISOString().split('T')[0];
     document.getElementById('f-data').addEventListener('change', function(){
       const d = new Date(this.value + 'T00:00:00');
@@ -2941,11 +3051,35 @@ function openModal(type){
       const status_pgto=body.querySelector('.status-pgto-btn.active').dataset.status;
       const val=parseFloat(document.getElementById('f-val').value);
       const cli=document.getElementById('f-cli').value.trim().toUpperCase();
+      const tipoServico=document.getElementById('f-tiposervico').value||null;
       const cat=document.getElementById('f-cat').value;
-      if(!cli||!val||isNaN(val))return showToast('Preencha todos os campos.','error');
-      entradas.push({id:nextId++,mes,data,cliente:cli,cat,val,status_pgto});
+      const desc=document.getElementById('f-desc').value.trim();
+      if(!cli||!val||isNaN(val))return showToast('Preencha cliente e valor.','error');
+      entradas.push({id:nextId++,mes,data,cliente:cli,desc,tipoServico,cat,val,status_pgto});
       sv('rs2_entradas',entradas);
-      criarClienteSeNaoExiste(cli,val);
+
+      // Criação automática de cliente — usa SOMENTE o campo cliente (nome puro)
+      const nomeClienteNormalizado = normalizarNome(cli);
+      const clienteExiste = clientes.find(c => normalizarNome(c.nome) === nomeClienteNormalizado);
+      if(!clienteExiste && nomeClienteNormalizado){
+        clientes.push({
+          id: nextId++,
+          nome: cli,
+          tipos: [],
+          servicos: tipoServico ? [tipoServico] : [],
+          status: 'Ativo',
+          atual: val,
+          liquido: 0,
+          meta: 0,
+          obs: 'Criado automaticamente via lançamento'
+        });
+        sv('rs2_clientes', clientes);
+        showToast(`Cliente "${cli}" adicionado automaticamente.`, 'info');
+      } else if(clienteExiste && tipoServico && !(clienteExiste.servicos||[]).includes(tipoServico)){
+        clienteExiste.servicos = [...(clienteExiste.servicos||[]), tipoServico];
+        sv('rs2_clientes', clientes);
+      }
+
       closeModal();renderAll();showToast('Entrada salva com sucesso!');
     };
   }
@@ -3501,6 +3635,8 @@ async function inicializar(){
   cfg.coresFornecedor = Object.assign({}, CONFIG_SEED.coresFornecedor, cfg.coresFornecedor || {});
   cfg.tiposCliente = cfg.tiposCliente || CONFIG_SEED.tiposCliente;
   cfg.servicosPrestados = cfg.servicosPrestados || CONFIG_SEED.servicosPrestados;
+  cfg.tiposServico = cfg.tiposServico || CONFIG_SEED.tiposServico;
+  cfg.coresTipoServico = Object.assign({}, CONFIG_SEED.coresTipoServico, cfg.coresTipoServico || {});
 
   nextId = Math.max(100,
     ...entradas.map(e => e.id),
