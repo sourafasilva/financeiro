@@ -165,6 +165,9 @@
   .status-pgto-btn{border:1px solid rgba(255,255,255,0.1);background:transparent;color:#666;transition:.15s;}
   .status-pgto-btn.active[data-status="Recebido"]{background:rgba(0,200,100,0.15);border-color:#00C864;color:#00C864;}
   .status-pgto-btn.active[data-status="Pendente"]{background:rgba(255,184,0,0.15);border-color:#FFB800;color:#FFB800;}
+  .status-saida-btn{border:1px solid rgba(255,255,255,0.1);background:transparent;color:#666;transition:.15s;}
+  .status-saida-btn.active[data-status="Pago"]{background:rgba(0,200,100,0.15);border-color:#00C864;color:#00C864;}
+  .status-saida-btn.active[data-status="A pagar"]{background:rgba(255,184,0,0.15);border-color:#FFB800;color:#FFB800;}
   .chip-select{padding:4px 12px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#666;font-size:12px;cursor:pointer;transition:.15s;margin:3px;}
   .chip-select.active{background:rgba(139,0,255,0.15);border-color:var(--accent);color:#fff;}
   tr.pendente td{opacity:0.65;}
@@ -413,6 +416,8 @@
           <select class="form-control" style="width:auto;padding:6px 12px;font-size:13px" id="filter-mes-saida" onchange="renderSaidas()">
             <option value="">Todos os meses</option>
           </select>
+          <button class="btn btn-ghost btn-sm" onclick="abrirGestaoRecorrencias()">🔁 Recorrentes</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('despesa-parcelada')">📦 Parcelada</button>
           <button class="btn btn-ghost btn-sm" onclick="openModal('custo-projeto')">+ Custo de projeto</button>
           <button class="btn btn-primary btn-sm" onclick="openModal('saida')">+ Nova saída</button>
         </div>
@@ -964,6 +969,8 @@ const CONFIG_SEED = {
   },
 };
 
+const RECORRENCIAS_SEED = [];
+
 // ═══════════════════════════════════════════
 // CAMADA DE DADOS — Firebase + cache local
 // ═══════════════════════════════════════════
@@ -984,8 +991,10 @@ async function sv(chave, dados) {
       'rs2_saidas':       'saidas',
       'rs2_clientes':     'clientes',
       'rs2_fornecedores': 'fornecedores',
-      'rs2_metas':        'metas',
-      'rs2_config':       'config'
+      'rs2_metas':             'metas',
+      'rs2_recorrencias':      'recorrencias',
+      'rs2_despesas_parc':     'despesasParceladas',
+      'rs2_config':            'config'
     };
     const caminho = caminhos[chave];
     if (caminho) {
@@ -1011,6 +1020,7 @@ function ld(chave, padrao) {
 }
 
 let entradas, contratos, saidas, clientes, fornecedores, metas, cfg, nextId;
+let recorrencias, despesasParceladas;
 
 // ═══════════════════════════════════════════
 // MIGRAÇÃO DE DADOS ANTIGOS (nomes de categoria)
@@ -1086,6 +1096,50 @@ function migrarDadosAntigos(){
     if(e.tipoServico===undefined){ e.tipoServico=null; mudouCampos=true; }
   });
   if(mudouCampos) sv('rs2_entradas', entradas);
+
+  // Backfill status_pgto nas saídas antigas (tratadas como já pagas)
+  let mudouSaidas=false;
+  saidas.forEach(s=>{
+    if(!s.status_pgto){ s.status_pgto='Pago'; mudouSaidas=true; }
+  });
+  if(mudouSaidas) sv('rs2_saidas', saidas);
+}
+
+// ═══════════════════════════════════════════
+// RECORRÊNCIAS — geração automática
+// ═══════════════════════════════════════════
+function gerarLancamentosRecorrentes(){
+  const mesesMap={JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
+  function mesIndex(mesStr){
+    const m=mesStr.slice(0,3), a=parseInt(mesStr.slice(4));
+    return a*12+(mesesMap[m]||0);
+  }
+  let gerouAlgo=false;
+  (recorrencias||[]).forEach(rec=>{
+    if(!rec.ativa && !rec.mesFim) return;
+    const inicioIdx=mesIndex(rec.mesInicio);
+    const fimIdx=rec.mesFim ? mesIndex(rec.mesFim) : Infinity;
+    cfg.meses.forEach(mes=>{
+      const idx=mesIndex(mes);
+      if(idx<inicioIdx) return;
+      if(idx>fimIdx) return;
+      if((rec.mesesPulados||[]).includes(mes)) return;
+      const jaExiste=saidas.some(s=>s.recorrenciaId===rec.id && s.mes===mes);
+      if(jaExiste) return;
+      const valor=(rec.mesesAlterados && rec.mesesAlterados[mes]!==undefined)
+        ? rec.mesesAlterados[mes] : rec.val;
+      saidas.push({
+        id:nextId++,
+        tipo_saida:'operacional',
+        mes, cat:rec.cat, desc:rec.nome,
+        val:valor, tipo:rec.tipo,
+        status_pgto:'A pagar',
+        recorrenciaId:rec.id
+      });
+      gerouAlgo=true;
+    });
+  });
+  if(gerouAlgo) sv('rs2_saidas', saidas);
 }
 
 // ═══════════════════════════════════════════
@@ -1402,7 +1456,16 @@ function renderDashboard(){
   const totalPrevistoAcum = todos.reduce((s,m)=>s+(m.totalPrevisto||0),0);
   const fotopAcum = todos.reduce((s,m)=>s+m.fotop,0);
   const emAberto  = contratos.filter(c=>c.status==='Em aberto').reduce((s,c)=>s+c.valor,0);
-  const totalSaidas = dashboardPeriod ? sumBy(saidas,'val',{mes:dashboardPeriod}) : saidas.reduce((s,x)=>s+x.val,0);
+  const saidasFiltradas = dashboardPeriod ? saidas.filter(s=>s.mes===dashboardPeriod) : saidas;
+  const saidasPagas   = saidasFiltradas.filter(s=>!s.status_pgto||s.status_pgto==='Pago');
+  const saidasAPagarA = saidasFiltradas.filter(s=>s.status_pgto==='A pagar');
+  // somar parcelas de despesas parceladas
+  const todasParcelas = (despesasParceladas||[]).flatMap(d=>d.parcelas.map(p=>({...p,mes:p.mes})));
+  const parcsFilt = dashboardPeriod ? todasParcelas.filter(p=>p.mes===dashboardPeriod) : todasParcelas;
+  const totalParcelasP = parcsFilt.filter(p=>p.status_pgto==='Pago').reduce((s,p)=>s+p.val,0);
+  const totalParcelasAP = parcsFilt.filter(p=>p.status_pgto!=='Pago').reduce((s,p)=>s+p.val,0);
+  const totalSaidasPagas = saidasPagas.reduce((s,x)=>s+x.val,0) + totalParcelasP;
+  const totalSaidasAPagar = saidasAPagarA.reduce((s,x)=>s+x.val,0) + totalParcelasAP;
 
   const saidasProjeto = saidas.filter(s=>s.tipo_saida==='projeto');
   const totalCustoProjeto = dashboardPeriod ? sumBy(saidasProjeto,'val',{mes:dashboardPeriod}) : saidasProjeto.reduce((s,x)=>s+x.val,0);
@@ -1472,8 +1535,9 @@ function renderDashboard(){
     </div>
     <div class="card red" style="animation-delay:240ms">
       <div class="card-dot"></div>
-      <div class="card-label">Saídas registradas</div>
-      <div class="card-value">${R(totalSaidas)}</div>
+      <div class="card-label">Saídas efetivadas</div>
+      <div class="card-value">${R(totalSaidasPagas)}</div>
+      ${totalSaidasAPagar>0?`<div class="card-sub" style="color:#FFB800">+${R(totalSaidasAPagar)} a pagar</div>`:''}
     </div>
     <div class="card" style="animation-delay:300ms">
       <div class="card-dot"></div>
@@ -1806,6 +1870,33 @@ function gerarParcelas(total, numParcelas, mesInicial){
   return parcelas;
 }
 
+function gerarParcelasDespesa(valorTotal, numParcelas, mesInicio){
+  const mesesMap={JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
+  const mesesNomes=['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+  const mesStr=mesInicio.slice(0,3), anoStr=parseInt(mesInicio.slice(4));
+  let mesIdx=mesesMap[mesStr], ano=2000+anoStr;
+  const valorParcela=Math.floor((valorTotal/numParcelas)*100)/100;
+  const resto=Math.round((valorTotal-valorParcela*numParcelas)*100)/100;
+  const parcelas=[];
+  for(let i=0;i<numParcelas;i++){
+    const val=i===numParcelas-1 ? valorParcela+resto : valorParcela;
+    const mesNome=mesesNomes[mesIdx%12]+'/'+String(ano+Math.floor(mesIdx/12)).slice(2);
+    if(!cfg.meses.includes(mesNome)){
+      cfg.meses.push(mesNome);
+      cfg.meses.sort((a,b)=>{
+        const mMap={JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
+        const[mA,aA]=[a.slice(0,3),parseInt(a.slice(4))];
+        const[mB,aB]=[b.slice(0,3),parseInt(b.slice(4))];
+        return aA!==aB ? aA-aB : mMap[mA]-mMap[mB];
+      });
+      sv('rs2_config',cfg);
+    }
+    parcelas.push({numero:i+1, mes:mesNome, val, status_pgto:'A pagar'});
+    mesIdx++;
+  }
+  return parcelas;
+}
+
 function garantirMesesParcelas(parcelas){
   const mMap = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
   let mudou=false;
@@ -1864,18 +1955,27 @@ function renderSaidas(){
   const operacionais = data.filter(s=>!s.tipo_saida || s.tipo_saida==='operacional');
   const projetos      = data.filter(s=>s.tipo_saida==='projeto');
 
-  const totalOp    = operacionais.reduce((s,x)=>s+x.val,0);
-  const totalProj  = projetos.reduce((s,x)=>s+x.val,0);
-  const totalGeral = totalOp + totalProj;
+  const totalOpPago  = operacionais.filter(s=>!s.status_pgto||s.status_pgto==='Pago').reduce((s,x)=>s+x.val,0);
+  const totalOpAP    = operacionais.filter(s=>s.status_pgto==='A pagar').reduce((s,x)=>s+x.val,0);
+  const totalProj    = projetos.reduce((s,x)=>s+x.val,0);
+  // parcelas do período
+  const parcsDoFil = (despesasParceladas||[]).flatMap(d=>
+    d.parcelas.filter(p=>!fil||p.mes===fil).map(p=>({...p,dId:d.id}))
+  );
+  const totalParcPago = parcsDoFil.filter(p=>p.status_pgto==='Pago').reduce((s,p)=>s+p.val,0);
+  const totalParcAP   = parcsDoFil.filter(p=>p.status_pgto!=='Pago').reduce((s,p)=>s+p.val,0);
+  const totalPago    = totalOpPago + totalProj + totalParcPago;
+  const totalAPagar  = totalOpAP + totalParcAP;
 
   document.getElementById('saidas-cats').innerHTML = `
     <div class="saida-cat-card">
-      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase">Total Saídas</div>
-      <div style="font-size:20px;font-weight:700;color:var(--red);margin-top:4px">${R(totalGeral)}</div>
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase">Total Efetivado</div>
+      <div style="font-size:20px;font-weight:700;color:var(--red);margin-top:4px">${R(totalPago)}</div>
+      ${totalAPagar>0?`<div style="font-size:11px;color:#FFB800;margin-top:2px">+${R(totalAPagar)} a pagar</div>`:''}
     </div>
     <div class="saida-cat-card">
       <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase">Despesas Operacionais</div>
-      <div style="font-size:20px;font-weight:700;color:#fff;margin-top:4px">${R(totalOp)}</div>
+      <div style="font-size:20px;font-weight:700;color:#fff;margin-top:4px">${R(totalOpPago+totalOpAP)}</div>
     </div>
     <div class="saida-cat-card">
       <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase">Custos de Projeto</div>
@@ -1918,26 +2018,224 @@ function renderSaidas(){
     <div class="table-card"><div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Mês</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Tipo</th><th>Ações</th>
+          <th>Mês</th><th>Status</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Tipo</th><th>Ações</th>
         </tr></thead>
         <tbody>
-          ${operacionais.map(s=>`
-            <tr>
+          ${operacionais.map(s=>{
+            const apagar = s.status_pgto==='A pagar';
+            const isRec  = !!s.recorrenciaId;
+            return `<tr class="${apagar?'pendente':''}">
               <td><span class="badge badge-gray">${s.mes}</span></td>
+              <td>${apagar
+                ? '<span class="badge badge-yellow">⏳ A pagar</span>'
+                : '<span class="badge badge-green">✓ Pago</span>'}</td>
               <td><span class="badge badge-purple">${s.cat}</span></td>
-              <td>${s.desc}</td>
+              <td>
+                <span>${s.desc}</span>
+                ${isRec?'<span style="font-size:10px;color:#555;margin-left:6px">🔁 recorrente</span>':''}
+              </td>
               <td class="money" style="color:var(--red)">${R(s.val)}</td>
-              <td><span class="badge ${s.tipo==='Fixo'?'badge-purple':'badge-yellow'}">${s.tipo}</span></td>
-              <td><div class="row-actions"><button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delSaida(${s.id}))">✕</button></div></td>
-            </tr>`).join('') ||
-          (q?`<tr><td colspan="6"><div class="empty"><div class="empty-icon">🔍</div>Nenhum resultado para "${searchEl.value}"</div></td></tr>`:'<tr><td colspan="6"><div class="empty"><div class="empty-icon">📭</div>Nenhuma despesa operacional</div></td></tr>')}
+              <td><span class="badge ${s.tipo==='Fixo'?'badge-purple':'badge-yellow'}">${s.tipo||'Fixo'}</span></td>
+              <td><div class="row-actions">
+                ${apagar?`<button class="btn btn-success btn-sm" onclick="marcarSaidaPaga(${s.id})">✓ Pago</button>`:''}
+                ${isRec?`<button class="btn btn-ghost btn-sm" title="Pular este mês" onclick="pularMesRecorrencia(${s.id})">⏭</button>`:''}
+                <button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delSaida(${s.id}))">✕</button>
+              </div></td>
+            </tr>`;
+          }).join('') ||
+          (q?`<tr><td colspan="7"><div class="empty"><div class="empty-icon">🔍</div>Nenhum resultado para "${searchEl.value}"</div></td></tr>`:'<tr><td colspan="7"><div class="empty"><div class="empty-icon">📭</div>Nenhuma despesa operacional</div></td></tr>')}
         </tbody>
       </table>
     </div></div>`;
 
-  document.getElementById('saidas-tabelas').innerHTML = tabelaProjetos + tabelaOp;
+  document.getElementById('saidas-tabelas').innerHTML = tabelaProjetos + tabelaOp + renderDespesasParceladasSecao(fil);
 }
+
 function delSaida(id){saidas=saidas.filter(s=>s.id!==id);sv('rs2_saidas',saidas);renderAll();showToast('Removido.','info');}
+
+function marcarSaidaPaga(id){
+  const s=saidas.find(x=>x.id===id);
+  if(!s) return;
+  s.status_pgto='Pago';
+  sv('rs2_saidas',saidas);
+  renderAll();
+  showToast(`✓ "${s.desc}" marcado como pago!`);
+}
+
+function pularMesRecorrencia(saidaId){
+  const s=saidas.find(x=>x.id===saidaId);
+  if(!s||!s.recorrenciaId) return;
+  if(!confirm(`Remover "${s.desc}" apenas do mês ${s.mes}? A recorrência continua nos outros meses.`)) return;
+  const r=recorrencias.find(x=>x.id===s.recorrenciaId);
+  if(r){ r.mesesPulados=[...(r.mesesPulados||[]),s.mes]; sv('rs2_recorrencias',recorrencias); }
+  saidas=saidas.filter(x=>x.id!==saidaId);
+  sv('rs2_saidas',saidas);
+  renderAll();
+}
+
+function renderDespesasParceladasSecao(fil){
+  const desp = despesasParceladas||[];
+  const despFil = fil ? desp.map(d=>({...d,parcelas:d.parcelas.filter(p=>p.mes===fil)})).filter(d=>d.parcelas.length>0) : desp;
+  if(despFil.length===0) return '';
+  return `
+    <div class="section-header" style="margin-top:20px">
+      <div class="section-title">Despesas Parceladas</div>
+    </div>
+    ${despFil.map(d=>{
+      const totalPagas=d.parcelas.filter(p=>p.status_pgto==='Pago').length;
+      const totalParc=d.numParcelas;
+      const pct=Math.round(totalPagas/totalParc*100);
+      return `
+        <div style="background:var(--bg2);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:18px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div>
+              <div style="font-weight:700;color:#fff;font-size:14px">${d.nome}</div>
+              <div style="font-size:11px;color:#666;margin-top:2px">${d.cat} · ${R(d.valorTotal)} total · ${totalPagas}/${totalParc} pagas</div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delDespesaParcelada(${d.id}))">✕</button>
+          </div>
+          <div style="background:rgba(255,255,255,0.06);border-radius:100px;height:6px;margin-bottom:12px">
+            <div style="height:100%;border-radius:100px;width:${pct}%;background:var(--accent)"></div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            ${d.parcelas.map(p=>`
+              <div onclick="toggleStatusParcelaDespesa(${d.id},${p.numero})"
+                style="cursor:pointer;padding:6px 12px;border-radius:8px;font-size:11px;
+                  background:${p.status_pgto==='Pago'?'rgba(0,200,100,0.15)':'rgba(255,184,0,0.15)'};
+                  border:1px solid ${p.status_pgto==='Pago'?'#00C864':'#FFB800'};
+                  color:${p.status_pgto==='Pago'?'#00C864':'#FFB800'}">
+                ${p.numero}/${totalParc} · ${p.mes} · ${R(p.val)}${p.status_pgto==='Pago'?' ✓':''}
+              </div>`).join('')}
+          </div>
+        </div>`;
+    }).join('')}`;
+}
+
+function toggleStatusParcelaDespesa(despesaId, numero){
+  const d=(despesasParceladas||[]).find(x=>x.id===despesaId);
+  if(!d) return;
+  const p=d.parcelas.find(x=>x.numero===numero);
+  if(!p) return;
+  p.status_pgto=p.status_pgto==='Pago'?'A pagar':'Pago';
+  sv('rs2_despesas_parc',despesasParceladas);
+  renderAll();
+}
+
+function delDespesaParcelada(id){
+  despesasParceladas=(despesasParceladas||[]).filter(d=>d.id!==id);
+  sv('rs2_despesas_parc',despesasParceladas);
+  renderAll();
+  showToast('Despesa parcelada removida.','info');
+}
+
+// ═══════════════════════════════════════════
+// GESTÃO DE RECORRÊNCIAS
+// ═══════════════════════════════════════════
+function abrirGestaoRecorrencias(){
+  fecharGestaoRecorrencias();
+  const ativas=(recorrencias||[]).filter(r=>r.ativa);
+  const encerradas=(recorrencias||[]).filter(r=>!r.ativa);
+  const html=`
+    <div id="recorrencias-overlay" style="position:fixed;inset:0;z-index:200;
+      background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);display:flex;
+      align-items:center;justify-content:center"
+      onclick="if(event.target===this)fecharGestaoRecorrencias()">
+      <div style="background:var(--bg2);border-radius:18px;border:1px solid rgba(139,0,255,0.2);
+        max-width:700px;width:90%;max-height:85vh;overflow-y:auto;padding:28px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+          <div style="font-size:17px;font-weight:700;color:#fff">🔁 Despesas Recorrentes</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" onclick="openModal('recorrencia')">+ Nova recorrente</button>
+            <button class="btn btn-ghost btn-sm" onclick="fecharGestaoRecorrencias()">✕</button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Ativas (${ativas.length})</div>
+        ${ativas.map(r=>renderLinhaRecorrencia(r)).join('')||'<div style="font-size:12px;color:#444;margin-bottom:16px">Nenhuma recorrência ativa</div>'}
+        ${encerradas.length>0?`
+          <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin:20px 0 10px">Encerradas (${encerradas.length})</div>
+          ${encerradas.map(r=>renderLinhaRecorrencia(r)).join('')}
+        `:''}
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+
+function fecharGestaoRecorrencias(){
+  const el=document.getElementById('recorrencias-overlay');
+  if(el) el.remove();
+}
+
+function renderLinhaRecorrencia(r){
+  return `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px;
+      background:rgba(255,255,255,0.02);border-radius:10px;margin-bottom:8px;
+      opacity:${r.ativa?1:0.5}">
+      <div style="flex:1">
+        <div style="font-weight:600;color:#fff;font-size:13px">${r.nome}</div>
+        <div style="font-size:11px;color:#666;margin-top:2px">
+          ${r.cat} · ${R(r.val)}/mês · desde ${r.mesInicio}
+          ${r.mesFim?` até ${r.mesFim}`:''}
+          ${(r.mesesPulados||[]).length>0?` · ${r.mesesPulados.length} mês(es) pulado(s)`:''}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="editRecorrencia(${r.id})">✎</button>
+        ${r.ativa
+          ?`<button class="btn btn-ghost btn-sm" onclick="desativarRecorrencia(${r.id})" title="Encerrar">⏸</button>`
+          :`<button class="btn btn-ghost btn-sm" onclick="reativarRecorrencia(${r.id})" title="Reativar">▶</button>`}
+        <button class="btn btn-danger btn-sm" onclick="delRecorrencia(${r.id})">✕</button>
+      </div>
+    </div>`;
+}
+
+function editRecorrencia(id){ openModal._editId=id; openModal('recorrencia-edit'); }
+
+function desativarRecorrencia(id){
+  const r=(recorrencias||[]).find(x=>x.id===id);
+  if(!r) return;
+  if(!confirm(`Encerrar "${r.nome}"? Não será mais gerada a partir do próximo mês.`)) return;
+  r.ativa=false;
+  r.mesFim=cfg.meses[cfg.meses.length-1];
+  sv('rs2_recorrencias',recorrencias);
+  fecharGestaoRecorrencias();
+  abrirGestaoRecorrencias();
+  renderAll();
+}
+
+function reativarRecorrencia(id){
+  const r=(recorrencias||[]).find(x=>x.id===id);
+  if(!r) return;
+  r.ativa=true; r.mesFim=null;
+  sv('rs2_recorrencias',recorrencias);
+  gerarLancamentosRecorrentes();
+  fecharGestaoRecorrencias();
+  abrirGestaoRecorrencias();
+  renderAll();
+}
+
+function delRecorrencia(id){
+  if(!confirm('Remover esta recorrência? Os lançamentos já gerados continuam existindo.')) return;
+  recorrencias=(recorrencias||[]).filter(r=>r.id!==id);
+  sv('rs2_recorrencias',recorrencias);
+  fecharGestaoRecorrencias();
+  abrirGestaoRecorrencias();
+  renderAll();
+}
+
+function atualizarPreviewParcelasDespesa(){
+  const val=parseFloat(document.getElementById('f-pval').value)||0;
+  const num=parseInt(document.getElementById('f-pnum').value)||1;
+  const mes=document.getElementById('f-pmesinicio').value;
+  if(!val||!mes){document.getElementById('preview-parcelas-despesa').innerHTML='';return;}
+  const parcelas=gerarParcelasDespesa(val,num,mes);
+  document.getElementById('preview-parcelas-despesa').innerHTML=`
+    <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Preview</div>
+    ${parcelas.map(p=>`
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+        <span style="font-size:12px;color:#888">Parcela ${p.numero}/${num} — ${p.mes}</span>
+        <span style="font-size:12px;font-weight:600;color:#fff">${R(p.val)}</span>
+      </div>`).join('')}`;
+}
 
 // ═══════════════════════════════════════════
 // RENDER META
@@ -2943,7 +3241,7 @@ function exportarExcel(){
 // BACKUP / RESTORE JSON
 // ═══════════════════════════════════════════
 function exportarJSON(){
-  const data=JSON.stringify({entradas,contratos,saidas,clientes,fornecedores,metas,cfg},null,2);
+  const data=JSON.stringify({entradas,contratos,saidas,clientes,fornecedores,metas,recorrencias,despesasParceladas,cfg},null,2);
   const a=document.createElement('a');
   a.href='data:application/json;charset=utf-8,'+encodeURIComponent(data);
   a.download=`backup_financeiro_${new Date().toISOString().slice(0,10)}.json`;
@@ -2963,6 +3261,8 @@ function processarImportJSON(input){
       if(d.clientes) clientes=d.clientes,sv('rs2_clientes',clientes);
       if(d.fornecedores) fornecedores=d.fornecedores, sv('rs2_fornecedores', fornecedores);
       if(d.metas) metas=d.metas, sv('rs2_metas', metas);
+      if(d.recorrencias) recorrencias=d.recorrencias, sv('rs2_recorrencias', recorrencias);
+      if(d.despesasParceladas) despesasParceladas=d.despesasParceladas, sv('rs2_despesas_parc', despesasParceladas);
       if(d.cfg) cfg=Object.assign({},CONFIG_SEED,d.cfg),sv('rs2_config',cfg);
       aplicarTema();renderAll();showToast('Backup restaurado com sucesso!');
     }catch(err){showToast('Arquivo inválido. Certifique-se de usar um backup JSON gerado por este sistema.','error');}
@@ -2973,8 +3273,8 @@ function processarImportJSON(input){
 function resetarDados(){
   if(!confirm('⚠ ATENÇÃO: Isso apaga TODOS os lançamentos, contratos e saídas. Tem certeza?'))return;
   if(!confirm('Segunda confirmação: deseja mesmo resetar tudo?'))return;
-  entradas=ENTRADAS_SEED;contratos=CONTRATOS_SEED;saidas=SAIDAS_SEED;clientes=CLIENTES_SEED;fornecedores=FORNECEDORES_SEED;metas=METAS_SEED;
-  sv('rs2_entradas',entradas);sv('rs2_contratos',contratos);sv('rs2_saidas',saidas);sv('rs2_clientes',clientes);sv('rs2_fornecedores',fornecedores);sv('rs2_metas',metas);
+  entradas=ENTRADAS_SEED;contratos=CONTRATOS_SEED;saidas=SAIDAS_SEED;clientes=CLIENTES_SEED;fornecedores=FORNECEDORES_SEED;metas=METAS_SEED;recorrencias=RECORRENCIAS_SEED;despesasParceladas=[];
+  sv('rs2_entradas',entradas);sv('rs2_contratos',contratos);sv('rs2_saidas',saidas);sv('rs2_clientes',clientes);sv('rs2_fornecedores',fornecedores);sv('rs2_metas',metas);sv('rs2_recorrencias',recorrencias);sv('rs2_despesas_parc',despesasParceladas);
   renderAll();showToast('Dados resetados para o estado inicial.','info');
 }
 
@@ -3214,16 +3514,108 @@ function openModal(type){
         <div class="form-group"><label class="form-label">Categoria</label><select class="form-control" id="f-scat">${scOpts}</select></div>
         <div class="form-group"><label class="form-label">Tipo</label><select class="form-control" id="f-stipo"><option>Fixo</option><option>Variável</option></select></div>
       </div>
-      <div class="form-group"><label class="form-label">Descrição</label><input class="form-control" type="text" id="f-sdesc" placeholder="Ex: Aluguel, Adobe, Nubank..."/></div>`;
+      <div class="form-group"><label class="form-label">Descrição</label><input class="form-control" type="text" id="f-sdesc" placeholder="Ex: Aluguel, Adobe, Nubank..."/></div>
+      <div class="form-group">
+        <label class="form-label">Status do pagamento</label>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="btn btn-sm status-saida-btn active" data-status="Pago" style="flex:1">✓ Pago</button>
+          <button type="button" class="btn btn-sm status-saida-btn" data-status="A pagar" style="flex:1">⏳ A pagar</button>
+        </div>
+      </div>`;
+    body.querySelectorAll('.status-saida-btn').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        body.querySelectorAll('.status-saida-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
     confirm.onclick=()=>{
       const mes=document.getElementById('f-smes').value;
       const val=parseFloat(document.getElementById('f-sval').value);
       const cat=document.getElementById('f-scat').value;
       const tipo=document.getElementById('f-stipo').value;
       const desc=document.getElementById('f-sdesc').value.trim();
+      const status_pgto=body.querySelector('.status-saida-btn.active').dataset.status;
       if(!desc||!val||isNaN(val))return showToast('Preencha todos os campos.','error');
-      saidas.push({id:nextId++,tipo_saida:'operacional',mes,cat,desc,val,tipo});
+      saidas.push({id:nextId++,tipo_saida:'operacional',mes,cat,desc,val,tipo,status_pgto});
       sv('rs2_saidas',saidas);closeModal();renderAll();showToast('Saída salva com sucesso!');
+    };
+  }
+  else if(type==='recorrencia'||type==='recorrencia-edit'){
+    const isEdit=type==='recorrencia-edit';
+    const r=isEdit?(recorrencias||[]).find(x=>x.id===openModal._editId):null;
+    title.textContent=isEdit?'✎ Editar Recorrência':'🔁 Nova Despesa Recorrente';
+    const catOpts=cfg.catsSaida.map(c=>`<option ${r&&r.cat===c?'selected':''}>${c}</option>`).join('');
+    const mesOpts=cfg.meses.map(m=>`<option ${r&&r.mesInicio===m?'selected':''}>${m}</option>`).join('');
+    body.innerHTML=`
+      <div class="form-group">
+        <label class="form-label">Nome</label>
+        <input class="form-control" type="text" id="f-rnome" value="${r?r.nome:''}" placeholder="Ex: Aluguel, Adobe Creative Cloud..."/>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Categoria</label><select class="form-control" id="f-rcat">${catOpts}</select></div>
+        <div class="form-group"><label class="form-label">Valor mensal (R$)</label><input class="form-control" type="number" id="f-rval" value="${r?r.val:''}"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tipo</label><select class="form-control" id="f-rtipo">
+          <option ${r&&r.tipo==='Fixo'?'selected':''}>Fixo</option>
+          <option ${r&&r.tipo==='Variável'?'selected':''}>Variável</option>
+        </select></div>
+        <div class="form-group"><label class="form-label">${isEdit?'Mês de início (não editável)':'Começa em'}</label>
+          <select class="form-control" id="f-rmesinicio" ${isEdit?'disabled':''}>${mesOpts}</select></div>
+      </div>`;
+    confirm.onclick=()=>{
+      const nome=document.getElementById('f-rnome').value.trim();
+      const cat=document.getElementById('f-rcat').value;
+      const val=parseFloat(document.getElementById('f-rval').value);
+      const tipo=document.getElementById('f-rtipo').value;
+      const mesInicio=document.getElementById('f-rmesinicio').value;
+      if(!nome||!val||isNaN(val)) return showToast('Preencha nome e valor.','error');
+      if(isEdit&&r){
+        Object.assign(r,{nome,cat,val,tipo});
+      } else {
+        if(!recorrencias) recorrencias=[];
+        recorrencias.push({id:nextId++,nome,cat,val,tipo,mesInicio,ativa:true,mesFim:null,mesesPulados:[],mesesAlterados:{}});
+      }
+      sv('rs2_recorrencias',recorrencias);
+      gerarLancamentosRecorrentes();
+      fecharGestaoRecorrencias();
+      closeModal();
+      renderAll();
+      showToast(isEdit?'Recorrência atualizada!':'Recorrência criada!');
+    };
+  }
+  else if(type==='despesa-parcelada'){
+    title.textContent='📦 Nova Despesa Parcelada';
+    const catOpts=cfg.catsSaida.map(c=>`<option>${c}</option>`).join('');
+    const mesOptsP=cfg.meses.map(m=>`<option>${m}</option>`).join('');
+    body.innerHTML=`
+      <div class="form-group">
+        <label class="form-label">Nome do item</label>
+        <input class="form-control" type="text" id="f-pnome" placeholder="Ex: Equipamento — Drone DJI"/>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Categoria</label><select class="form-control" id="f-pcat">${catOpts}</select></div>
+        <div class="form-group"><label class="form-label">Valor total (R$)</label><input class="form-control" type="number" id="f-pval" oninput="atualizarPreviewParcelasDespesa()"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Número de parcelas</label><input class="form-control" type="number" id="f-pnum" min="1" value="1" oninput="atualizarPreviewParcelasDespesa()"/></div>
+        <div class="form-group"><label class="form-label">Primeira parcela em</label><select class="form-control" id="f-pmesinicio" onchange="atualizarPreviewParcelasDespesa()">${mesOptsP}</select></div>
+      </div>
+      <div id="preview-parcelas-despesa" style="margin-top:12px"></div>`;
+    confirm.onclick=()=>{
+      const nome=document.getElementById('f-pnome').value.trim();
+      const cat=document.getElementById('f-pcat').value;
+      const valorTotal=parseFloat(document.getElementById('f-pval').value);
+      const numParcelas=parseInt(document.getElementById('f-pnum').value);
+      const mesInicio=document.getElementById('f-pmesinicio').value;
+      if(!nome||!valorTotal||!numParcelas) return showToast('Preencha todos os campos.','error');
+      const parcelas=gerarParcelasDespesa(valorTotal,numParcelas,mesInicio);
+      if(!despesasParceladas) despesasParceladas=[];
+      despesasParceladas.push({id:nextId++,nome,cat,valorTotal,numParcelas,mesInicio,parcelas});
+      sv('rs2_despesas_parc',despesasParceladas);
+      closeModal();
+      renderAll();
+      showToast(`"${nome}" parcelado em ${numParcelas}x criado!`);
     };
   }
   else if(type==='cliente'||type==='cliente-edit'){
@@ -3613,8 +4005,10 @@ async function inicializar(){
         if (dados.saidas)    { _cache['rs2_saidas']    = dados.saidas;    }
         if (dados.clientes)  { _cache['rs2_clientes']  = dados.clientes;  }
         if (dados.fornecedores) { _cache['rs2_fornecedores'] = dados.fornecedores; }
-        if (dados.metas)     { _cache['rs2_metas']     = dados.metas;     }
-        if (dados.config)    { _cache['rs2_config']    = dados.config;    }
+        if (dados.metas)              { _cache['rs2_metas']         = dados.metas;              }
+        if (dados.recorrencias)       { _cache['rs2_recorrencias']  = dados.recorrencias;       }
+        if (dados.despesasParceladas) { _cache['rs2_despesas_parc'] = dados.despesasParceladas; }
+        if (dados.config)             { _cache['rs2_config']        = dados.config;             }
       }
     } catch(err) {
       console.warn('Firebase read error — usando dados locais:', err);
@@ -3627,7 +4021,9 @@ async function inicializar(){
   saidas       = ld('rs2_saidas',       SAIDAS_SEED);
   clientes     = ld('rs2_clientes',     CLIENTES_SEED);
   fornecedores = ld('rs2_fornecedores', FORNECEDORES_SEED);
-  metas        = ld('rs2_metas',        METAS_SEED);
+  metas           = ld('rs2_metas',         METAS_SEED);
+  recorrencias    = ld('rs2_recorrencias',  RECORRENCIAS_SEED);
+  despesasParceladas = ld('rs2_despesas_parc', []);
   cfg       = ld('rs2_config',    CONFIG_SEED);
   cfg       = Object.assign({}, CONFIG_SEED, cfg);
   cfg.coresEntrada = Object.assign({}, CORES_ENTRADA_DEFAULT, cfg.coresEntrada || {});
@@ -3644,11 +4040,14 @@ async function inicializar(){
     ...saidas.map(s => s.id),
     ...clientes.map(c => c.id),
     ...fornecedores.map(f => f.id),
-    ...metas.map(m => m.id)
+    ...metas.map(m => m.id),
+    ...(recorrencias||[]).map(r => r.id),
+    ...(despesasParceladas||[]).map(d => d.id)
   ) + 1;
 
   aplicarTema();
   migrarDadosAntigos();
+  gerarLancamentosRecorrentes();
   renderAll();
   wireChartModeBtns();
 
