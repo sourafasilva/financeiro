@@ -306,14 +306,14 @@
     <div class="nav-item" data-page="fornecedores"><span class="icon">🤝</span> Fornecedores</div>
     <div class="nav-section">Financeiro</div>
     <div class="nav-item" data-page="saidas"><span class="icon">📤</span> Saídas</div>
-    <div class="nav-item" data-page="meta"><span class="icon">🎯</span> Meta Renda Fixa</div>
+    <div class="nav-item" data-page="meta"><span class="icon">🎯</span> Metas</div>
     <div class="nav-item" data-page="historico"><span class="icon">📈</span> Histórico</div>
     <div class="nav-section">Sistema</div>
     <div class="nav-item" data-page="config"><span class="icon">⚙️</span> Configurações</div>
   </nav>
   <div class="sidebar-footer">
-    <div class="meta-mini" title="Média de renda fixa vs meta mensal">
-      <div class="meta-mini-label">Meta Renda Fixa</div>
+    <div class="meta-mini" title="Progresso da meta principal">
+      <div class="meta-mini-label" id="sm-meta-label">Meta</div>
       <div class="meta-mini-value" id="sm-meta-val">—</div>
       <div class="meta-mini-bar"><div class="meta-mini-fill" id="sm-meta-fill" style="width:0%"></div></div>
     </div>
@@ -423,20 +423,31 @@
 
     <!-- META -->
     <div class="page" id="page-meta">
-      <div class="meta-grid" id="meta-cards"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div class="table-card">
-          <div class="table-header">
-            <span class="section-title">Clientes Fixos</span>
-            <button class="btn btn-ghost btn-sm" onclick="openModal('cliente-fixo')">+ Adicionar</button>
-          </div>
-          <div id="clientes-meta-list"></div>
+
+      <!-- Header -->
+      <div class="section-header">
+        <div class="section-title">Metas</div>
+        <button class="btn btn-primary btn-sm" onclick="openModal('meta')">+ Nova meta</button>
+      </div>
+
+      <!-- Cards de metas -->
+      <div id="metas-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:24px"></div>
+
+      <!-- Gráfico de histórico -->
+      <div class="chart-card" style="margin-bottom:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div class="chart-title">Evolução das metas</div>
+          <select id="meta-historico-select" class="form-control" style="width:auto;font-size:12px"
+            onchange="renderMetaHistorico()"></select>
         </div>
-        <div class="chart-card">
-          <div class="chart-title">Renda Fixa × Meta por mês</div>
-          <div class="chart-wrap"><canvas id="chart-meta"></canvas></div>
+        <div style="position:relative;height:220px">
+          <canvas id="chart-meta-historico"></canvas>
         </div>
       </div>
+
+      <!-- Detalhamento por meta (clientes vinculados) -->
+      <div id="metas-detalhes"></div>
+
     </div>
 
     <!-- CLIENTES -->
@@ -540,22 +551,6 @@
         </div>
         <div style="margin-top:16px">
           <button class="btn btn-primary" onclick="aplicarIdentidade()">Aplicar Identidade</button>
-        </div>
-      </div>
-
-      <!-- Meta financeira -->
-      <div class="config-section">
-        <div class="config-section-title">🎯 Metas Financeiras</div>
-        <div class="config-row">
-          <div class="config-label">Meta mensal renda fixa (R$)</div>
-          <input class="config-input" id="cfg-meta" type="number" placeholder="4000" min="0"/>
-        </div>
-        <div class="config-row">
-          <div class="config-label">Meta total mensal (R$)</div>
-          <input class="config-input" id="cfg-meta-total" type="number" placeholder="8000" min="0"/>
-        </div>
-        <div style="margin-top:16px">
-          <button class="btn btn-primary" onclick="aplicarMetas()">Aplicar Metas</button>
         </div>
       </div>
 
@@ -847,6 +842,90 @@ const CORES_FORNECEDOR_DEFAULT = {
   "Assistente":           "#555555"
 };
 
+// ═══════════════════════════════════════════
+// METAS
+// ═══════════════════════════════════════════
+const METAS_SEED = [
+  {
+    id: 1,
+    nome: "Renda Fixa Líquida",
+    tipo: "renda_fixa_liquida",
+    alvo: 4000,
+    cor: "#8B00FF",
+    prazo: null,
+    obs: "Meta de renda recorrente líquida após custos com fornecedores",
+    ativa: true
+  }
+];
+
+const TIPOS_META = {
+  renda_fixa_liquida: {
+    label: "Renda Fixa Líquida",
+    desc: "Soma do valor líquido de todos os clientes Fixos ativos",
+    unidade: "R$",
+    calcular: () => {
+      return clientes
+        .filter(c => (c.tipos||[]).includes('Fixo') && c.status === 'Ativo')
+        .reduce((s, c) => s + (c.liquido > 0 ? c.liquido : c.atual || 0), 0);
+    }
+  },
+  renda_fixa_bruta: {
+    label: "Renda Fixa Bruta",
+    desc: "Soma do valor bruto de todos os clientes Fixos ativos",
+    unidade: "R$",
+    calcular: () => {
+      return clientes
+        .filter(c => (c.tipos||[]).includes('Fixo') && c.status === 'Ativo')
+        .reduce((s, c) => s + (c.atual || 0), 0);
+    }
+  },
+  faturamento_mensal: {
+    label: "Faturamento Mensal Total",
+    desc: "Média de faturamento bruto nos últimos 3 meses",
+    unidade: "R$",
+    calcular: () => {
+      const ultimos3 = cfg.meses.slice(-3);
+      const totais = ultimos3.map(m =>
+        entradas
+          .filter(e => e.mes === m && (!e.status_pgto || e.status_pgto === 'Recebido'))
+          .reduce((s, e) => s + e.val, 0)
+      );
+      return totais.length > 0 ? Math.round(totais.reduce((s,v) => s+v, 0) / totais.length) : 0;
+    }
+  },
+  margem_real: {
+    label: "Margem Real Mínima",
+    desc: "Percentual do faturamento que fica após custos de projeto",
+    unidade: "%",
+    calcular: () => {
+      const mesAtual = cfg.meses[cfg.meses.length - 1];
+      const receitaMes = entradas
+        .filter(e => e.mes === mesAtual && (!e.status_pgto || e.status_pgto === 'Recebido'))
+        .reduce((s, e) => s + e.val, 0);
+      const custosMes = saidas
+        .filter(s => s.tipo_saida === 'projeto' && s.mes === mesAtual)
+        .reduce((s, x) => s + x.val, 0);
+      if (receitaMes === 0) return 0;
+      return Math.round(((receitaMes - custosMes) / receitaMes) * 100);
+    }
+  },
+  meta_crescimento: {
+    label: "Crescimento Mensal",
+    desc: "Percentual de crescimento em relação ao mês anterior",
+    unidade: "%",
+    calcular: () => {
+      const meses = cfg.meses;
+      if (meses.length < 2) return 0;
+      const mesAtual  = meses[meses.length - 1];
+      const mesAnterior = meses[meses.length - 2];
+      const atual   = entradas.filter(e => e.mes === mesAtual && (!e.status_pgto || e.status_pgto === 'Recebido')).reduce((s,e)=>s+e.val,0);
+      const anterior = entradas.filter(e => e.mes === mesAnterior && (!e.status_pgto || e.status_pgto === 'Recebido')).reduce((s,e)=>s+e.val,0);
+      if (anterior === 0) return 0;
+      return Math.round(((atual - anterior) / anterior) * 100);
+    }
+  }
+};
+
 const CONFIG_SEED = {
   nome: "RAFA SILVA",
   sub: "Criador Visual",
@@ -885,6 +964,7 @@ async function sv(chave, dados) {
       'rs2_saidas':       'saidas',
       'rs2_clientes':     'clientes',
       'rs2_fornecedores': 'fornecedores',
+      'rs2_metas':        'metas',
       'rs2_config':       'config'
     };
     const caminho = caminhos[chave];
@@ -910,7 +990,7 @@ function ld(chave, padrao) {
   }
 }
 
-let entradas, contratos, saidas, clientes, fornecedores, cfg, nextId;
+let entradas, contratos, saidas, clientes, fornecedores, metas, cfg, nextId;
 
 // ═══════════════════════════════════════════
 // MIGRAÇÃO DE DADOS ANTIGOS (nomes de categoria)
@@ -1098,7 +1178,7 @@ function aplicarTema(){
 // ═══════════════════════════════════════════
 // RENDER DASHBOARD
 // ═══════════════════════════════════════════
-let barChart, doughnutChart, metaChart;
+let barChart, doughnutChart, chartMetaHistorico;
 let dashboardPeriod = '';
 let chartBarMode = 'stacked'; // 'stacked' | 'grouped' | 'categoria'
 function setDashboardPeriod(m){ dashboardPeriod=m; renderDashboard(); }
@@ -1248,7 +1328,6 @@ function renderDashboard(){
   const mesesTodos = getMesesAtivos();
   const meses = dashboardPeriod ? mesesTodos.filter(m=>m===dashboardPeriod) : mesesTodos;
   const todos = meses.map(m=>calcMes(m));
-  const META = cfg.meta||4000;
 
   document.getElementById('period-chips').innerHTML = [
     `<div class="period-chip ${!dashboardPeriod?'active':''}" onclick="setDashboardPeriod('')">Todos</div>`,
@@ -1257,23 +1336,50 @@ function renderDashboard(){
 
   const totalAcum = todos.reduce((s,m)=>s+m.total,0);
   const totalPrevistoAcum = todos.reduce((s,m)=>s+(m.totalPrevisto||0),0);
-  const fixaAcum  = todos.reduce((s,m)=>s+m.fixa,0);
   const fotopAcum = todos.reduce((s,m)=>s+m.fotop,0);
-  const evAcum    = todos.reduce((s,m)=>s+m.evento,0);
-  const varAcum   = todos.reduce((s,m)=>s+m.variavel,0);
-  const sabAcum   = todos.reduce((s,m)=>s+m.sabrina,0);
-  const mediaFixa = meses.length ? Math.round(fixaAcum/meses.length) : 0;
   const emAberto  = contratos.filter(c=>c.status==='Em aberto').reduce((s,c)=>s+c.valor,0);
   const totalSaidas = dashboardPeriod ? sumBy(saidas,'val',{mes:dashboardPeriod}) : saidas.reduce((s,x)=>s+x.val,0);
-  const pct = Math.min(Math.round(mediaFixa/META*100),100);
 
   const saidasProjeto = saidas.filter(s=>s.tipo_saida==='projeto');
   const totalCustoProjeto = dashboardPeriod ? sumBy(saidasProjeto,'val',{mes:dashboardPeriod}) : saidasProjeto.reduce((s,x)=>s+x.val,0);
   const margemReal = totalAcum - totalCustoProjeto;
   const pctMargem  = totalAcum>0 ? Math.round(margemReal/totalAcum*100) : 0;
 
-  document.getElementById('sm-meta-val').textContent = `${R(mediaFixa)} / ${R(META)}`;
-  document.getElementById('sm-meta-fill').style.width = pct+'%';
+  const metasAtivas = metas.filter(m=>m.ativa!==false);
+  const primeiraMeta = metasAtivas[0];
+  if(primeiraMeta && TIPOS_META[primeiraMeta.tipo]){
+    const tipoPM = TIPOS_META[primeiraMeta.tipo];
+    const atualPM = tipoPM.calcular();
+    const pctPM = primeiraMeta.alvo>0 ? Math.min(Math.round(atualPM/primeiraMeta.alvo*100),100) : 0;
+    document.getElementById('sm-meta-label').textContent = primeiraMeta.nome;
+    document.getElementById('sm-meta-val').textContent = `${tipoPM.unidade==='%'?atualPM+'%':R(atualPM)} / ${tipoPM.unidade==='%'?primeiraMeta.alvo+'%':R(primeiraMeta.alvo)}`;
+    document.getElementById('sm-meta-fill').style.width = pctPM+'%';
+  } else {
+    document.getElementById('sm-meta-label').textContent = 'Metas';
+    document.getElementById('sm-meta-val').textContent = '—';
+    document.getElementById('sm-meta-fill').style.width = '0%';
+  }
+
+  const miniMetas = metasAtivas.slice(0,2).map(m=>{
+    const tipo = TIPOS_META[m.tipo];
+    if(!tipo) return '';
+    const atual = tipo.calcular();
+    const pctM = m.alvo>0 ? Math.min(Math.round(atual/m.alvo*100),100) : 0;
+    const cor = m.cor||'#8B00FF';
+    return `
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:11px;color:#888">${m.nome}</span>
+          <span style="font-size:11px;font-weight:700;color:#fff">${pctM}%</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.06);border-radius:100px;height:5px">
+          <div style="height:100%;border-radius:100px;width:${pctM}%;background:${cor}"></div>
+        </div>
+        <div style="font-size:10px;color:#555;margin-top:2px">
+          ${tipo.unidade==='%'?atual+'%':R(atual)} de ${tipo.unidade==='%'?m.alvo+'%':R(m.alvo)}
+        </div>
+      </div>`;
+  }).join('');
 
   document.getElementById('cards-grid').innerHTML = `
     <div class="card hero" style="animation-delay:0ms">
@@ -1282,12 +1388,11 @@ function renderDashboard(){
       <div class="card-value">${R(totalAcum)}</div>
       <div class="card-sub">${meses.length} ${meses.length===1?'mês':'meses'} · Média ${R(meses.length?Math.round(totalAcum/meses.length):0)}/mês</div>
     </div>
-    <div class="card" style="animation-delay:60ms">
+    <div class="card" style="animation-delay:60ms;cursor:pointer" onclick="goPage('meta')" title="Ver todas as metas">
       <div class="card-dot"></div>
-      <div class="card-label">Renda Fixa Média</div>
-      <div class="card-value">${R(mediaFixa)}</div>
-      <div class="progress-wrap"><div class="progress-fill ${mediaFixa>=META?'over':''}" style="width:${pct}%"></div></div>
-      <div class="card-trend ${mediaFixa>=META?'up':'down'}">${pct}% da meta de ${R(META)}</div>
+      <div class="card-label">Metas</div>
+      ${miniMetas || '<div style="font-size:12px;color:#444">Nenhuma meta cadastrada</div>'}
+      <div style="font-size:10px;color:#555;margin-top:8px">Clique para ver detalhes →</div>
     </div>
     <div class="card yellow" style="animation-delay:120ms">
       <div class="card-dot"></div>
@@ -1729,70 +1834,298 @@ function delSaida(id){saidas=saidas.filter(s=>s.id!==id);sv('rs2_saidas',saidas)
 // RENDER META
 // ═══════════════════════════════════════════
 function renderMeta(){
-  const META=cfg.meta||4000;
-  const meses=getMesesAtivos();
-  const fixaAcum=meses.reduce((s,m)=>s+sumBy(entradas,'val',{mes:m,cat:'Cliente Fixo'}),0);
-  const mediaFixa=meses.length?Math.round(fixaAcum/meses.length):0;
-  const pct=Math.min(Math.round(mediaFixa/META*100),100);
-  const falta=Math.max(META-mediaFixa,0);
-  const clientesFixos=clientes.filter(c=>(c.tipos||[]).includes('Fixo'));
-  const fixaAtual=clientesFixos.reduce((s,c)=>s+(c.liquido>0?c.liquido:c.atual),0);
-  const fixaMeta=clientesFixos.reduce((s,c)=>s+c.meta,0);
+  renderMetaCards();
+  renderMetaHistoricoSelect();
+  renderMetaHistorico();
+  renderMetaDetalhes();
+}
 
-  document.getElementById('meta-cards').innerHTML=`
-    <div class="meta-card">
-      <div class="meta-card-title">Meta Renda Fixa Mensal</div>
-      <div class="meta-big">${R(META)}<span>/mês</span></div>
-      <div class="progress-wrap" style="height:12px;margin-top:12px">
-        <div class="progress-fill ${pct>=100?'over':''}" style="width:${pct}%"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-top:8px">
-        <span style="font-size:12px;color:var(--text3)">Atual: ${R(mediaFixa)}/mês</span>
-        <span style="font-size:12px;color:var(--accent-light)">${pct}%</span>
-      </div>
-      ${falta>0?`<div style="margin-top:10px;padding:10px;background:rgba(255,184,0,0.08);border-radius:8px;border:1px solid rgba(255,184,0,0.2)"><span style="color:var(--yellow);font-size:12px">⚠ Faltam ${R(falta)}/mês</span></div>`
-      :'<div style="margin-top:10px;padding:10px;background:rgba(0,255,136,0.08);border-radius:8px"><span style="color:var(--green);font-size:12px">✓ Meta atingida!</span></div>'}
-    </div>
-    <div class="meta-card">
-      <div class="meta-card-title">Potencial com Reajustes</div>
-      <div class="meta-big">${R(fixaMeta)}<span>/mês</span></div>
-      <div style="margin-top:8px;font-size:12px;color:var(--text3)">Atual: ${R(fixaAtual)}/mês</div>
-      <div style="margin-top:4px;font-size:12px;color:var(--green)">+${R(fixaMeta-fixaAtual)}/mês se atingir todas as metas</div>
+function renderMetaCards(){
+  document.getElementById('metas-grid').innerHTML = metas
+    .filter(m => m.ativa !== false)
+    .map(m => {
+      const tipo = TIPOS_META[m.tipo];
+      if (!tipo) return '';
+
+      const atual   = tipo.calcular();
+      const alvo    = m.alvo;
+      const pct     = alvo > 0 ? Math.min(Math.round(atual / alvo * 100), 100) : 0;
+      const falta   = Math.max(alvo - atual, 0);
+      const cor     = m.cor || '#8B00FF';
+      const unidade = tipo.unidade;
+
+      let estadoIcon, estadoLabel, estadoCor;
+      if (pct >= 100)      { estadoIcon='✅'; estadoLabel='Atingida';   estadoCor='#00C864'; }
+      else if (pct >= 70)  { estadoIcon='🟢'; estadoLabel='No caminho'; estadoCor='#00C864'; }
+      else if (pct >= 40)  { estadoIcon='🟡'; estadoLabel='Atenção';    estadoCor='#FFB800'; }
+      else                 { estadoIcon='🔴'; estadoLabel='Crítico';    estadoCor='#FF4466'; }
+
+      let prazoHtml = '';
+      if (m.prazo) {
+        const mesesMap = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
+        const mesAtualIdx = cfg.meses.length - 1;
+        const mesAtualStr = cfg.meses[mesAtualIdx];
+        const [mA, aA] = [mesAtualStr.slice(0,3), parseInt(mesAtualStr.slice(4))];
+        const [mP, aP] = [m.prazo.slice(0,3), parseInt(m.prazo.slice(4))];
+        const mesesRestantes = (aP - aA) * 12 + (mesesMap[mP] - mesesMap[mA]);
+        prazoHtml = `<div style="font-size:11px;color:#555;margin-top:4px">
+          ⏱ Prazo: ${m.prazo} — ${mesesRestantes > 0 ? mesesRestantes + ' meses restantes' : mesesRestantes === 0 ? 'Este mês!' : 'Prazo encerrado'}
+        </div>`;
+      }
+
+      let simuladorHtml = '';
+      if (m.tipo === 'renda_fixa_liquida' && pct < 100) {
+        simuladorHtml = `
+          <div style="margin-top:12px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.06)">
+            <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Simulador</div>
+            <div style="font-size:12px;color:#888">
+              Um novo cliente fixo de <input type="number" id="sim-val-${m.id}"
+                style="width:70px;background:transparent;border:none;border-bottom:1px solid #333;color:#fff;font-size:12px;text-align:center"
+                placeholder="R$" oninput="simularMeta(${m.id}, ${atual}, ${alvo})"/>
+              líquido/mês levaria você a
+              <span id="sim-resultado-${m.id}" style="color:${cor};font-weight:700">—</span>
+            </div>
+          </div>`;
+      }
+
+      return `
+        <div style="background:var(--bg2);border:1px solid rgba(255,255,255,0.06);border-radius:14px;
+          padding:22px;border-top:3px solid ${cor};position:relative">
+
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+            <div>
+              <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">
+                ${tipo.label}
+              </div>
+              <div style="font-size:16px;font-weight:700;color:#fff">${m.nome}</div>
+              ${m.obs ? `<div style="font-size:11px;color:#444;margin-top:2px">${m.obs}</div>` : ''}
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost btn-sm" onclick="editMeta(${m.id})" title="Editar">✎</button>
+              <button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delMeta(${m.id}))" title="Remover">✕</button>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px">
+            <div style="font-size:32px;font-weight:900;color:#fff">
+              ${unidade === '%' ? atual + '%' : R(atual)}
+            </div>
+            <div style="font-size:14px;color:#555">
+              de ${unidade === '%' ? alvo + '%' : R(alvo)}
+            </div>
+          </div>
+
+          <div style="background:rgba(255,255,255,0.06);border-radius:100px;height:8px;margin-bottom:8px;overflow:hidden">
+            <div style="height:100%;border-radius:100px;width:${pct}%;
+              background:linear-gradient(90deg,${cor},${cor}99);transition:.5s"></div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:12px;color:${estadoCor};font-weight:600">
+              ${estadoIcon} ${estadoLabel}
+            </div>
+            <div style="font-size:12px;color:#666">
+              ${pct}% · ${pct < 100 ? 'faltam ' + (unidade === '%' ? (alvo-atual)+'%' : R(falta)) : 'meta atingida!'}
+            </div>
+          </div>
+
+          ${prazoHtml}
+          ${simuladorHtml}
+        </div>`;
+    }).join('') ||
+    `<div class="empty" style="grid-column:1/-1">
+      <div class="empty-icon">🎯</div>
+      Nenhuma meta cadastrada. Crie sua primeira meta!
     </div>`;
+}
 
-  document.getElementById('clientes-meta-list').innerHTML=clientes.filter(c=>(c.tipos||[]).includes('Fixo')).map(c=>{
-    const valorParaMeta = c.liquido>0 ? c.liquido : c.atual;
-    return `
-    <div class="cliente-row">
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:600;color:#fff">${c.nome}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${c.status||''}</div>
-        <div class="progress-wrap" style="width:120px;margin-top:6px">
-          <div class="progress-fill" style="width:${Math.min(Math.round(valorParaMeta/c.meta*100),100)}%"></div>
-        </div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:14px;font-weight:700">${R(c.atual)}</div>
-        ${c.liquido>0?`<div style="font-size:11px;color:var(--green)">líquido: ${R(c.liquido)}</div>`:''}
-        <div style="font-size:11px;color:var(--accent-light)">meta: ${R(c.meta)}</div>
-        ${valorParaMeta<c.meta?`<div style="font-size:11px;color:var(--yellow)">+${R(c.meta-valorParaMeta)}</div>`:'<div style="font-size:11px;color:var(--green)">✓</div>'}
-      </div>
-      <span style="margin-left:8px;display:inline-block"><button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delCliente(${c.id}))">✕</button></span>
-    </div>`;
-  }).join('');
+function simularMeta(metaId, atual, alvo){
+  const input = document.getElementById(`sim-val-${metaId}`);
+  const result = document.getElementById(`sim-resultado-${metaId}`);
+  const val = parseFloat(input.value) || 0;
+  if (!val) { result.textContent = '—'; return; }
+  const novoTotal = atual + val;
+  const novoPct = Math.min(Math.round(novoTotal / alvo * 100), 100);
+  result.textContent = `${R(novoTotal)} (${novoPct}% da meta)`;
+}
 
-  const ctx=document.getElementById('chart-meta').getContext('2d');
-  if(metaChart) metaChart.destroy();
-  const md=getMesesAtivos().map(m=>({mes:m,fixa:sumBy(entradas,'val',{mes:m,cat:'Cliente Fixo'})}));
-  const corM=cfg.cor||'#8B00FF';
-  const {r:rm,g:gm,b:bm}=hexToRgb(corM);
-  metaChart=new Chart(ctx,{
-    data:{labels:md.map(m=>m.mes),datasets:[
-      {label:'Renda Fixa',type:'line',data:md.map(m=>m.fixa),borderColor:corM,backgroundColor:`rgba(${rm},${gm},${bm},0.08)`,fill:true,tension:0.4,pointRadius:3,pointBackgroundColor:corM,borderWidth:2},
-      {label:'Meta',data:md.map(()=>META),type:'line',borderColor:accentLight(),backgroundColor:'transparent',borderDash:[6,3],pointRadius:0,borderWidth:2,tension:0}
-    ]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#999',font:{size:11}}}},scales:{x:{ticks:{color:'#666',font:{size:11}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#666',font:{size:11},callback:v=>'R$'+v},grid:{color:'rgba(255,255,255,0.06)'}}}}
+function renderMetaHistoricoSelect(){
+  const sel = document.getElementById('meta-historico-select');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = metas.filter(m => m.ativa !== false).map(m =>
+    `<option value="${m.id}">${m.nome}</option>`
+  ).join('');
+  if(cur) sel.value = cur;
+}
+
+function renderMetaHistorico(){
+  const sel = document.getElementById('meta-historico-select');
+  if (!sel) return;
+  const metaId = parseInt(sel.value);
+  const m = metas.find(x => x.id === metaId);
+  if (!m) return;
+
+  const tipo = TIPOS_META[m.tipo];
+  if (!tipo) return;
+
+  const ctx = document.getElementById('chart-meta-historico');
+  if (!ctx) return;
+  if (chartMetaHistorico) chartMetaHistorico.destroy();
+
+  const labels = cfg.meses;
+  const dadosMes = labels.map(() => tipo.calcular());
+
+  const cor = m.cor || '#8B00FF';
+
+  chartMetaHistorico = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: m.nome,
+          data: dadosMes,
+          borderColor: cor,
+          backgroundColor: cor + '15',
+          fill: true,
+          tension: 0.4,
+          pointBackgroundColor: cor,
+          pointRadius: 4,
+          borderWidth: 2
+        },
+        {
+          label: 'Meta: ' + (tipo.unidade === '%' ? m.alvo + '%' : R(m.alvo)),
+          data: labels.map(() => m.alvo),
+          borderColor: '#444',
+          borderDash: [6, 3],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+          tension: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#666', font: { size: 11 }, boxWidth: 12 } },
+        tooltip: {
+          callbacks: {
+            label: c => ` ${c.dataset.label}: ${tipo.unidade === '%' ? c.raw + '%' : R(c.raw)}`
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#555', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: {
+          ticks: {
+            color: '#555',
+            font: { size: 11 },
+            callback: v => tipo.unidade === '%' ? v + '%' : 'R$' + Math.round(v/1000) + 'k'
+          },
+          grid: { color: 'rgba(255,255,255,0.06)' }
+        }
+      }
+    }
   });
+}
+
+function renderMetaDetalhes(){
+  const container = document.getElementById('metas-detalhes');
+  if (!container) return;
+
+  const metasAtivas = metas.filter(m => m.ativa !== false);
+
+  container.innerHTML = metasAtivas.map(m => {
+    if (m.tipo !== 'renda_fixa_liquida' && m.tipo !== 'renda_fixa_bruta') return '';
+
+    const isLiquida = m.tipo === 'renda_fixa_liquida';
+    const cor = m.cor || '#8B00FF';
+
+    const clientesFixos = clientes
+      .filter(c => (c.tipos||[]).includes('Fixo') && c.status === 'Ativo')
+      .sort((a, b) => {
+        const vA = isLiquida ? (a.liquido > 0 ? a.liquido : a.atual||0) : (a.atual||0);
+        const vB = isLiquida ? (b.liquido > 0 ? b.liquido : b.atual||0) : (b.atual||0);
+        return vB - vA;
+      });
+
+    const total = clientesFixos.reduce((s, c) => {
+      return s + (isLiquida ? (c.liquido > 0 ? c.liquido : c.atual||0) : (c.atual||0));
+    }, 0);
+
+    const clientesPotenciais = clientes
+      .filter(c => (c.tipos||[]).includes('Potencial') || c.status === 'Potencial');
+
+    return `
+      <div style="background:var(--bg2);border:1px solid rgba(255,255,255,0.06);
+        border-radius:14px;padding:22px;margin-bottom:16px">
+
+        <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:16px">
+          🎯 ${m.nome} — Composição atual
+        </div>
+
+        <div style="margin-bottom:16px">
+          <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
+            Clientes fixos ativos
+          </div>
+          ${clientesFixos.map(c => {
+            const val = isLiquida ? (c.liquido > 0 ? c.liquido : c.atual||0) : (c.atual||0);
+            const pctCliente = total > 0 ? Math.round(val / m.alvo * 100) : 0;
+            return `
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 0;
+                border-bottom:1px solid rgba(255,255,255,0.04)">
+                <div style="flex:1">
+                  <div style="font-size:13px;font-weight:600;color:#fff">${c.nome}</div>
+                  ${isLiquida && c.liquido > 0 && c.atual !== c.liquido ?
+                    `<div style="font-size:11px;color:#555">Bruto: ${R(c.atual)} → Líquido: ${R(c.liquido)}</div>` :
+                    ''}
+                </div>
+                <div style="text-align:right">
+                  <div style="font-size:14px;font-weight:700;color:#fff">${R(val)}</div>
+                  <div style="font-size:10px;color:#555">${pctCliente}% da meta</div>
+                </div>
+                <div style="width:80px;background:rgba(255,255,255,0.06);border-radius:100px;height:4px">
+                  <div style="height:100%;border-radius:100px;width:${Math.min(pctCliente,100)}%;background:${cor}"></div>
+                </div>
+              </div>`;
+          }).join('') || '<div style="font-size:12px;color:#444">Nenhum cliente fixo ativo cadastrado</div>'}
+        </div>
+
+        ${clientesPotenciais.length > 0 ? `
+          <div>
+            <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
+              Potenciais (não contam ainda)
+            </div>
+            ${clientesPotenciais.map(c => {
+              const val = isLiquida ? (c.liquido > 0 ? c.liquido : c.meta||0) : (c.meta||0);
+              return `
+                <div style="display:flex;justify-content:space-between;padding:8px 0;
+                  border-bottom:1px solid rgba(255,255,255,0.04);opacity:0.5">
+                  <span style="font-size:12px;color:#888">${c.nome}</span>
+                  <span style="font-size:12px;color:#666">${val > 0 ? R(val) + '/mês estimado' : 'valor não definido'}</span>
+                </div>`;
+            }).join('')}
+          </div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function atualizarDescTipoMeta(){
+  const sel  = document.getElementById('f-mtipo');
+  const desc = document.getElementById('desc-tipo-meta');
+  if (!sel || !desc) return;
+  const tipo = TIPOS_META[sel.value];
+  desc.textContent = tipo ? tipo.desc : '';
+}
+
+function editMeta(id){ openModal._editId = id; openModal('meta-edit'); }
+function delMeta(id){
+  metas = metas.filter(m => m.id !== id);
+  sv('rs2_metas', metas);
+  renderAll();
 }
 function delCliente(id){clientes=clientes.filter(c=>c.id!==id);sv('rs2_clientes',clientes);renderAll();showToast('Cliente removido.','info');}
 
@@ -2180,8 +2513,6 @@ function renderConfig(){
   document.getElementById('cfg-sub').value=cfg.sub||'';
   document.getElementById('cfg-iniciais').value=cfg.iniciais||'RS';
   document.getElementById('cfg-cor').value=cfg.cor||'#8B00FF';
-  document.getElementById('cfg-meta').value=cfg.meta||4000;
-  document.getElementById('cfg-meta-total').value=cfg.metaTotal||8000;
 
   // Categorias de entrada
   document.getElementById('cats-entrada-list').innerHTML=cfg.catsEntrada.map((c,i)=>{
@@ -2246,14 +2577,6 @@ function aplicarIdentidade(){
   aplicarTema();
   renderAll();
   showToast('Identidade aplicada!');
-}
-
-function aplicarMetas(){
-  cfg.meta=Number(document.getElementById('cfg-meta').value)||4000;
-  cfg.metaTotal=Number(document.getElementById('cfg-meta-total').value)||8000;
-  sv('rs2_config',cfg);
-  renderAll();
-  showToast('Metas atualizadas!');
 }
 
 function uploadLogo(input){
@@ -2449,7 +2772,7 @@ function exportarExcel(){
 // BACKUP / RESTORE JSON
 // ═══════════════════════════════════════════
 function exportarJSON(){
-  const data=JSON.stringify({entradas,contratos,saidas,clientes,fornecedores,cfg},null,2);
+  const data=JSON.stringify({entradas,contratos,saidas,clientes,fornecedores,metas,cfg},null,2);
   const a=document.createElement('a');
   a.href='data:application/json;charset=utf-8,'+encodeURIComponent(data);
   a.download=`backup_financeiro_${new Date().toISOString().slice(0,10)}.json`;
@@ -2468,6 +2791,7 @@ function processarImportJSON(input){
       if(d.saidas) saidas=d.saidas,sv('rs2_saidas',saidas);
       if(d.clientes) clientes=d.clientes,sv('rs2_clientes',clientes);
       if(d.fornecedores) fornecedores=d.fornecedores, sv('rs2_fornecedores', fornecedores);
+      if(d.metas) metas=d.metas, sv('rs2_metas', metas);
       if(d.cfg) cfg=Object.assign({},CONFIG_SEED,d.cfg),sv('rs2_config',cfg);
       aplicarTema();renderAll();showToast('Backup restaurado com sucesso!');
     }catch(err){showToast('Arquivo inválido. Certifique-se de usar um backup JSON gerado por este sistema.','error');}
@@ -2478,8 +2802,8 @@ function processarImportJSON(input){
 function resetarDados(){
   if(!confirm('⚠ ATENÇÃO: Isso apaga TODOS os lançamentos, contratos e saídas. Tem certeza?'))return;
   if(!confirm('Segunda confirmação: deseja mesmo resetar tudo?'))return;
-  entradas=ENTRADAS_SEED;contratos=CONTRATOS_SEED;saidas=SAIDAS_SEED;clientes=CLIENTES_SEED;fornecedores=FORNECEDORES_SEED;
-  sv('rs2_entradas',entradas);sv('rs2_contratos',contratos);sv('rs2_saidas',saidas);sv('rs2_clientes',clientes);sv('rs2_fornecedores',fornecedores);
+  entradas=ENTRADAS_SEED;contratos=CONTRATOS_SEED;saidas=SAIDAS_SEED;clientes=CLIENTES_SEED;fornecedores=FORNECEDORES_SEED;metas=METAS_SEED;
+  sv('rs2_entradas',entradas);sv('rs2_contratos',contratos);sv('rs2_saidas',saidas);sv('rs2_clientes',clientes);sv('rs2_fornecedores',fornecedores);sv('rs2_metas',metas);
   renderAll();showToast('Dados resetados para o estado inicial.','info');
 }
 
@@ -2696,23 +3020,6 @@ function openModal(type){
       sv('rs2_saidas',saidas);closeModal();renderAll();showToast('Saída salva com sucesso!');
     };
   }
-  else if(type==='cliente-fixo'){
-    title.textContent='🎯 Adicionar Cliente Fixo';
-    body.innerHTML=`
-      <div class="form-group"><label class="form-label">Nome do cliente</label><input class="form-control" type="text" id="f-cnome" placeholder="Ex: IDEALTEC"/></div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Valor atual/mês</label><input class="form-control" type="number" id="f-catual" placeholder="0"/></div>
-        <div class="form-group"><label class="form-label">Meta ideal/mês</label><input class="form-control" type="number" id="f-cmeta" placeholder="0"/></div>
-      </div>`;
-    confirm.onclick=()=>{
-      const nome=document.getElementById('f-cnome').value.trim().toUpperCase();
-      const atual=parseFloat(document.getElementById('f-catual').value)||0;
-      const meta=parseFloat(document.getElementById('f-cmeta').value)||0;
-      if(!nome)return showToast('Digite o nome.','error');
-      clientes.push({id:nextId++,nome,atual,meta,liquido:0,tipos:['Fixo'],servicos:[],status:'Ativo',obs:''});
-      sv('rs2_clientes',clientes);closeModal();renderAll();showToast('Cliente fixo adicionado!');
-    };
-  }
   else if(type==='cliente'||type==='cliente-edit'){
     const isEdit = type==='cliente-edit';
     const c = isEdit ? clientes.find(x=>x.id===openModal._editId) : null;
@@ -2819,262 +3126,4 @@ function openModal(type){
       const nome    = document.getElementById('f-fnome').value.trim();
       const especialidades = [...body.querySelectorAll('.chip-select[data-group="especialidades"].active')].map(b=>b.dataset.value);
       const contato = document.getElementById('f-fcontato').value.trim();
-      const obs     = document.getElementById('f-fobs').value.trim();
-      if(!nome) return showToast('Digite o nome do fornecedor.','error');
-      if(isEdit&&f){
-        Object.assign(f,{nome,especialidades,contato,obs});
-        showToast('Fornecedor atualizado!');
-      } else {
-        fornecedores.push({id:nextId++,nome,especialidades,contato,obs});
-        showToast('Fornecedor adicionado!');
-      }
-      sv('rs2_fornecedores', fornecedores);
-      closeModal();
-      renderAll();
-    };
-  }
-  else if(type==='custo-projeto'){
-    title.textContent = '👥 Novo Custo de Projeto';
-
-    const mOptsC = cfg.meses.map(m=>`<option>${m}</option>`).join('');
-    const fornOpts = fornecedores.map(f=>`<option value="${f.id}">${f.nome} — ${(f.especialidades||(f.especialidade?[f.especialidade]:[])).join(', ')}</option>`).join('');
-    const cliOpts = ['(Sem vínculo)', ...clientes.map(c=>c.nome),
-      ...[...new Set(contratos.map(c=>c.projeto))]
-    ].map(n=>`<option>${n}</option>`).join('');
-
-    body.innerHTML = `
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Mês</label>
-          <select class="form-control" id="f-cmes">${mOptsC}</select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Data do pagamento</label>
-          <input class="form-control" type="date" id="f-cdata" value="${new Date().toISOString().split('T')[0]}"/>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Fornecedor</label>
-          <select class="form-control" id="f-cforn">${fornOpts}</select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Função neste projeto</label>
-          <select class="form-control" id="f-cfuncao"></select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Valor (R$)</label>
-          <input class="form-control" type="number" id="f-cval" placeholder="0" min="0" step="0.01"/>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Cliente / Projeto vinculado</label>
-          <select class="form-control" id="f-ccli">${cliOpts}</select>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Descrição</label>
-        <input class="form-control" type="text" id="f-cdesc" placeholder="Ex: Produção mensal julho, Cobertura casamento..."/>
-      </div>`;
-
-    const atualizarFuncaoOpts = () => {
-      const forn = fornecedores.find(f=>f.id===parseInt(document.getElementById('f-cforn').value));
-      const esps = forn ? (forn.especialidades||(forn.especialidade?[forn.especialidade]:[])) : [];
-      document.getElementById('f-cfuncao').innerHTML = esps.map(e=>`<option>${e}</option>`).join('');
-    };
-    document.getElementById('f-cforn').addEventListener('change', atualizarFuncaoOpts);
-    atualizarFuncaoOpts();
-
-    confirm.onclick = () => {
-      const mes      = document.getElementById('f-cmes').value;
-      const data     = document.getElementById('f-cdata').value || null;
-      const fornId   = parseInt(document.getElementById('f-cforn').value);
-      const funcao   = document.getElementById('f-cfuncao').value;
-      const val      = parseFloat(document.getElementById('f-cval').value);
-      const cli      = document.getElementById('f-ccli').value;
-      const desc     = document.getElementById('f-cdesc').value.trim();
-      if(!val||isNaN(val)) return showToast('Informe o valor.','error');
-      saidas.push({
-        id: nextId++,
-        tipo_saida: 'projeto',
-        mes, data,
-        fornecedorId: fornId,
-        funcao,
-        clienteVinculado: cli==='(Sem vínculo)' ? null : cli,
-        desc, val,
-        status: 'Pago'
-      });
-      sv('rs2_saidas', saidas);
-      closeModal();
-      renderAll();
-      showToast('Custo de projeto registrado!');
-    };
-  }
-
-  document.getElementById('modal-overlay').classList.add('open');
-}
-
-function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
-
-// ═══════════════════════════════════════════
-// NAVEGAÇÃO
-// ═══════════════════════════════════════════
-const PAGE_TITLES={dashboard:'Dashboard',entradas:'Entradas',contratos:'Contratos & Parcelas',saidas:'Saídas',meta:'Meta Renda Fixa',clientes:'Clientes',fornecedores:'Fornecedores',historico:'Histórico',config:'Configurações'};
-
-function goPage(page){
-  const current=document.querySelector('.page.active');
-  const doSwitch=()=>{
-    document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
-    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active','page-out'));
-    const ni=document.querySelector(`.nav-item[data-page="${page}"]`);
-    if(ni) ni.classList.add('active');
-    const pg=document.getElementById('page-'+page);
-    if(pg){
-      pg.classList.add('active','page-in');
-      pg.addEventListener('animationend',()=>pg.classList.remove('page-in'),{once:true});
-    }
-    document.getElementById('topbar-title').textContent=PAGE_TITLES[page]||page;
-    if(window.innerWidth<=768){
-      document.getElementById('sidebar').classList.remove('open');
-      document.getElementById('sidebar-overlay').classList.remove('show');
-    }
-    if(page==='config') renderConfig();
-  };
-  if(current && current.id!=='page-'+page){
-    current.classList.add('page-out');
-    setTimeout(doSwitch,150);
-  } else {
-    doSwitch();
-  }
-}
-
-document.querySelectorAll('.nav-item').forEach(item=>{
-  item.addEventListener('click',()=>goPage(item.dataset.page));
-});
-
-// ═══════════════════════════════════════════
-// ATALHOS DE TECLADO
-// ═══════════════════════════════════════════
-document.addEventListener('keydown',e=>{
-  if(e.key==='Escape') closeModal();
-  if(e.key==='n'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!document.getElementById('modal-overlay').classList.contains('open')){
-    openModal('entrada');
-  }
-});
-
-// ═══════════════════════════════════════════
-// RENDER ALL
-// ═══════════════════════════════════════════
-function renderAll(){
-  renderDashboard();
-  renderEntradas();
-  renderContratos();
-  renderSaidas();
-  renderMeta();
-  renderClientes();
-  renderFornecedores();
-  renderHistorico();
-}
-
-// INIT
-function formatDateTop(d){
-  const dias=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-  const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  return `${dias[d.getDay()]}, ${String(d.getDate()).padStart(2,'0')} ${meses[d.getMonth()]} ${d.getFullYear()}`;
-}
-document.getElementById('topbar-date').textContent=formatDateTop(new Date());
-
-// ═══════════════════════════════════════════
-// STATUS DE CONEXÃO
-// ═══════════════════════════════════════════
-function atualizarStatusConexao(online){
-  const topbar = document.querySelector('.topbar-right');
-  const existente = document.getElementById('conexao-status');
-  if (existente) existente.remove();
-
-  const dot = document.createElement('div');
-  dot.id = 'conexao-status';
-  dot.title = online ? 'Conectado ao Firebase — dados sincronizados' : 'Modo offline — dados salvos localmente';
-  dot.style.cssText = `
-    width: 8px; height: 8px; border-radius: 50%;
-    background: ${online ? '#00C864' : '#FFB800'};
-    box-shadow: 0 0 6px ${online ? '#00C864' : '#FFB800'};
-    flex-shrink: 0;
-    cursor: default;
-  `;
-  topbar.prepend(dot);
-}
-
-// ═══════════════════════════════════════════
-// INICIALIZAÇÃO
-// ═══════════════════════════════════════════
-async function inicializar(){
-  // Tenta carregar dados do Firebase
-  if (window.__db) {
-    try {
-      const snap = await window.__dbGet(
-        window.__dbChild(window.__dbRef(window.__db), 'rafa_financeiro')
-      );
-      if (snap.exists()) {
-        const dados = snap.val();
-        if (dados.entradas)  { _cache['rs2_entradas']  = dados.entradas;  }
-        if (dados.contratos) { _cache['rs2_contratos'] = dados.contratos; }
-        if (dados.saidas)    { _cache['rs2_saidas']    = dados.saidas;    }
-        if (dados.clientes)  { _cache['rs2_clientes']  = dados.clientes;  }
-        if (dados.fornecedores) { _cache['rs2_fornecedores'] = dados.fornecedores; }
-        if (dados.config)    { _cache['rs2_config']    = dados.config;    }
-      }
-    } catch(err) {
-      console.warn('Firebase read error — usando dados locais:', err);
-    }
-  }
-
-  // Carrega estado (agora do cache, que foi populado pelo Firebase ou localStorage)
-  entradas     = ld('rs2_entradas',     ENTRADAS_SEED);
-  contratos    = ld('rs2_contratos',    CONTRATOS_SEED);
-  saidas       = ld('rs2_saidas',       SAIDAS_SEED);
-  clientes     = ld('rs2_clientes',     CLIENTES_SEED);
-  fornecedores = ld('rs2_fornecedores', FORNECEDORES_SEED);
-  cfg       = ld('rs2_config',    CONFIG_SEED);
-  cfg       = Object.assign({}, CONFIG_SEED, cfg);
-  cfg.coresEntrada = Object.assign({}, CORES_ENTRADA_DEFAULT, cfg.coresEntrada || {});
-  cfg.tiposFornecedor = cfg.tiposFornecedor || CONFIG_SEED.tiposFornecedor;
-  cfg.coresFornecedor = Object.assign({}, CONFIG_SEED.coresFornecedor, cfg.coresFornecedor || {});
-  cfg.tiposCliente = cfg.tiposCliente || CONFIG_SEED.tiposCliente;
-  cfg.servicosPrestados = cfg.servicosPrestados || CONFIG_SEED.servicosPrestados;
-
-  nextId = Math.max(100,
-    ...entradas.map(e => e.id),
-    ...contratos.map(c => c.id),
-    ...saidas.map(s => s.id),
-    ...clientes.map(c => c.id),
-    ...fornecedores.map(f => f.id)
-  ) + 1;
-
-  aplicarTema();
-  migrarDadosAntigos();
-  renderAll();
-  wireChartModeBtns();
-
-  // Mostra indicador de conexão
-  atualizarStatusConexao(!!window.__db);
-}
-
-// Aguarda o Firebase estar pronto, então inicializa
-if (window.__firebaseReady) {
-  inicializar();
-} else {
-  window.__onFirebaseReady = inicializar;
-  // Timeout de segurança: se Firebase não carregar em 3s, inicia offline
-  setTimeout(() => {
-    if (typeof window.__onFirebaseReady === 'function') {
-      console.warn('Firebase timeout — iniciando em modo offline');
-      window.__onFirebaseReady = null;
-      inicializar();
-    }
-  }, 3000);
-}
-</script>
-</body>
-</html>
+      const obs 
