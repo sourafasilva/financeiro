@@ -865,8 +865,8 @@ const TIPOS_META = {
     unidade: "R$",
     calcular: () => {
       return clientes
-        .filter(c => (c.tipos||[]).includes('Fixo') && c.status === 'Ativo')
-        .reduce((s, c) => s + (c.liquido > 0 ? c.liquido : c.atual || 0), 0);
+        .filter(c => clienteEhFixo(c) && c.status === 'Ativo')
+        .reduce((s, c) => s + (c.liquido > 0 ? c.liquido : (c.atual || 0)), 0);
     }
   },
   renda_fixa_bruta: {
@@ -875,7 +875,7 @@ const TIPOS_META = {
     unidade: "R$",
     calcular: () => {
       return clientes
-        .filter(c => (c.tipos||[]).includes('Fixo') && c.status === 'Ativo')
+        .filter(c => clienteEhFixo(c) && c.status === 'Ativo')
         .reduce((s, c) => s + (c.atual || 0), 0);
     }
   },
@@ -1031,10 +1031,26 @@ function migrarDadosAntigos(){
       delete c.servico;
       mudouCli=true;
     }
-    if(!c.tipos){ c.tipos=[]; mudouCli=true; }
     if(!c.liquido){ c.liquido=0; mudouCli=true; }
   });
   if(mudouCli) sv('rs2_clientes', clientes);
+
+  // Popular tipos[] em clientes que não têm (ou ficaram com array vazio
+  // de uma migração anterior) — só roda se ainda não houver conteúdo,
+  // para não sobrescrever escolhas manuais do usuário
+  let mudouTipos=false;
+  clientes.forEach(c=>{
+    if(!c.tipos || c.tipos.length===0){
+      c.tipos=[];
+      if(c.status==='Ativo' && (c.atual>0 || c.liquido>0)){
+        c.tipos.push('Fixo');
+      } else if(c.status==='Potencial'){
+        c.tipos.push('Potencial');
+      }
+      mudouTipos=true;
+    }
+  });
+  if(mudouTipos) sv('rs2_clientes', clientes);
 
   // Migrar entradas sem status_pgto
   let mudouEnt=false;
@@ -1064,6 +1080,20 @@ function fmtData(data){
   if (!data) return '<span style="color:#444">—</span>';
   const d = new Date(data + 'T00:00:00');
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function clienteEhFixo(c){
+  // Critério 1: tem o campo tipos novo e inclui "Fixo"
+  if (c.tipos && c.tipos.length > 0) {
+    return c.tipos.includes('Fixo');
+  }
+  // Critério 2 (fallback/legado): campo singular antigo
+  if (c.tipo === 'Fixo' || c.servico === 'Cliente Fixo') {
+    return true;
+  }
+  // Critério 3 (fallback final): cliente ativo com valor recorrente
+  // e sem indicação de ser avulso/contrato/potencial
+  return c.status === 'Ativo' && (c.atual > 0 || c.liquido > 0);
 }
 
 function getMesesAtivos(){
@@ -1531,14 +1561,21 @@ function selecionarClienteEntrada(nome){
   document.getElementById('f-cli').value = nome;
   document.getElementById('cli-suggestions').style.display = 'none';
 }
+function normalizarNome(nome){
+  return (nome || '')
+    .trim()
+    .toUpperCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 function criarClienteSeNaoExiste(cli, val){
-  const nomeCliente = (cli||'').toUpperCase();
-  if(!nomeCliente) return;
-  const clienteExiste = clientes.find(c=>c.nome===nomeCliente);
+  const nomeClienteNormalizado = normalizarNome(cli);
+  if(!nomeClienteNormalizado) return;
+  const clienteExiste = clientes.find(c => normalizarNome(c.nome) === nomeClienteNormalizado);
   if(!clienteExiste){
     clientes.push({
       id: nextId++,
-      nome: nomeCliente,
+      nome: (cli||'').toUpperCase(),
       tipos: [],
       servicos: [],
       status: 'Ativo',
@@ -1548,9 +1585,44 @@ function criarClienteSeNaoExiste(cli, val){
       obs: 'Criado automaticamente via lançamento'
     });
     sv('rs2_clientes', clientes);
-    if(typeof showToast==='function') showToast(`Cliente "${nomeCliente}" adicionado automaticamente.`, 'info');
+    if(typeof showToast==='function') showToast(`Cliente "${(cli||'').toUpperCase()}" adicionado automaticamente.`, 'info');
   }
 }
+
+function limparClientesDuplicados(){
+  const vistos = new Map(); // nome normalizado → cliente mantido
+  const paraRemover = [];
+
+  clientes.forEach(c=>{
+    const key = normalizarNome(c.nome);
+    if(!vistos.has(key)){
+      vistos.set(key, c);
+    } else {
+      const existente = vistos.get(key);
+      const pontuacao = (cliAux) =>
+        (cliAux.liquido>0?1:0) + (cliAux.meta>0?1:0) +
+        (cliAux.obs?1:0) + ((cliAux.tipos||[]).length) + ((cliAux.servicos||[]).length);
+
+      if(pontuacao(c) > pontuacao(existente)){
+        paraRemover.push(existente.id);
+        vistos.set(key, c);
+      } else {
+        paraRemover.push(c.id);
+      }
+    }
+  });
+
+  if(paraRemover.length===0){
+    console.log('Nenhum cliente duplicado encontrado.');
+    return;
+  }
+
+  clientes = clientes.filter(c => !paraRemover.includes(c.id));
+  sv('rs2_clientes', clientes);
+  renderAll();
+  console.log(`${paraRemover.length} cliente(s) duplicado(s) removido(s):`, paraRemover);
+}
+window.limparClientesDuplicados = limparClientesDuplicados;
 
 function editEntrada(id){
   const e = entradas.find(x=>x.id===id);
@@ -2045,7 +2117,7 @@ function renderMetaDetalhes(){
     const cor = m.cor || '#8B00FF';
 
     const clientesFixos = clientes
-      .filter(c => (c.tipos||[]).includes('Fixo') && c.status === 'Ativo')
+      .filter(c => clienteEhFixo(c) && c.status === 'Ativo')
       .sort((a, b) => {
         const vA = isLiquida ? (a.liquido > 0 ? a.liquido : a.atual||0) : (a.atual||0);
         const vB = isLiquida ? (b.liquido > 0 ? b.liquido : b.atual||0) : (b.atual||0);
