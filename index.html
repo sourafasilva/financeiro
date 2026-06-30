@@ -3126,4 +3126,342 @@ function openModal(type){
       const nome    = document.getElementById('f-fnome').value.trim();
       const especialidades = [...body.querySelectorAll('.chip-select[data-group="especialidades"].active')].map(b=>b.dataset.value);
       const contato = document.getElementById('f-fcontato').value.trim();
-      const obs 
+      const obs     = document.getElementById('f-fobs').value.trim();
+      if(!nome) return showToast('Digite o nome do fornecedor.','error');
+      if(isEdit&&f){
+        Object.assign(f,{nome,especialidades,contato,obs});
+        showToast('Fornecedor atualizado!');
+      } else {
+        fornecedores.push({id:nextId++,nome,especialidades,contato,obs});
+        showToast('Fornecedor adicionado!');
+      }
+      sv('rs2_fornecedores', fornecedores);
+      closeModal();
+      renderAll();
+    };
+  }
+  else if(type==='custo-projeto'){
+    title.textContent = '👥 Novo Custo de Projeto';
+
+    const mOptsC = cfg.meses.map(m=>`<option>${m}</option>`).join('');
+    const fornOpts = fornecedores.map(f=>`<option value="${f.id}">${f.nome} — ${(f.especialidades||(f.especialidade?[f.especialidade]:[])).join(', ')}</option>`).join('');
+    const cliOpts = ['(Sem vínculo)', ...clientes.map(c=>c.nome),
+      ...[...new Set(contratos.map(c=>c.projeto))]
+    ].map(n=>`<option>${n}</option>`).join('');
+
+    body.innerHTML = `
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Mês</label>
+          <select class="form-control" id="f-cmes">${mOptsC}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data do pagamento</label>
+          <input class="form-control" type="date" id="f-cdata" value="${new Date().toISOString().split('T')[0]}"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Fornecedor</label>
+          <select class="form-control" id="f-cforn">${fornOpts}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Função neste projeto</label>
+          <select class="form-control" id="f-cfuncao"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Valor (R$)</label>
+          <input class="form-control" type="number" id="f-cval" placeholder="0" min="0" step="0.01"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cliente / Projeto vinculado</label>
+          <select class="form-control" id="f-ccli">${cliOpts}</select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrição</label>
+        <input class="form-control" type="text" id="f-cdesc" placeholder="Ex: Produção mensal julho, Cobertura casamento..."/>
+      </div>`;
+
+    const atualizarFuncaoOpts = () => {
+      const forn = fornecedores.find(f=>f.id===parseInt(document.getElementById('f-cforn').value));
+      const esps = forn ? (forn.especialidades||(forn.especialidade?[forn.especialidade]:[])) : [];
+      document.getElementById('f-cfuncao').innerHTML = esps.map(e=>`<option>${e}</option>`).join('');
+    };
+    document.getElementById('f-cforn').addEventListener('change', atualizarFuncaoOpts);
+    atualizarFuncaoOpts();
+
+    confirm.onclick = () => {
+      const mes      = document.getElementById('f-cmes').value;
+      const data     = document.getElementById('f-cdata').value || null;
+      const fornId   = parseInt(document.getElementById('f-cforn').value);
+      const funcao   = document.getElementById('f-cfuncao').value;
+      const val      = parseFloat(document.getElementById('f-cval').value);
+      const cli      = document.getElementById('f-ccli').value;
+      const desc     = document.getElementById('f-cdesc').value.trim();
+      if(!val||isNaN(val)) return showToast('Informe o valor.','error');
+      saidas.push({
+        id: nextId++,
+        tipo_saida: 'projeto',
+        mes, data,
+        fornecedorId: fornId,
+        funcao,
+        clienteVinculado: cli==='(Sem vínculo)' ? null : cli,
+        desc, val,
+        status: 'Pago'
+      });
+      sv('rs2_saidas', saidas);
+      closeModal();
+      renderAll();
+      showToast('Custo de projeto registrado!');
+    };
+  }
+  else if (type === 'meta' || type === 'meta-edit') {
+    const isEdit = type === 'meta-edit';
+    const m = isEdit ? metas.find(x => x.id === openModal._editId) : null;
+    title.textContent = isEdit ? '✎ Editar Meta' : '🎯 Nova Meta';
+
+    const tiposOpts = Object.entries(TIPOS_META).map(([key, t]) =>
+      `<option value="${key}" ${m && m.tipo === key ? 'selected' : ''}>${t.label}</option>`
+    ).join('');
+
+    const mesesOpts = ['(Sem prazo)', ...cfg.meses].map(mes =>
+      `<option ${m && m.prazo === mes ? 'selected' : ''}>${mes}</option>`
+    ).join('');
+
+    body.innerHTML = `
+      <div class="form-group">
+        <label class="form-label">Nome da meta</label>
+        <input class="form-control" type="text" id="f-mnome"
+          value="${m ? m.nome : ''}" placeholder="Ex: Renda Fixa Líquida"/>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tipo de cálculo</label>
+          <select class="form-control" id="f-mtipo" onchange="atualizarDescTipoMeta()">${tiposOpts}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor alvo</label>
+          <input class="form-control" type="number" id="f-malvo"
+            value="${m ? m.alvo : ''}" placeholder="Ex: 4000"/>
+        </div>
+      </div>
+      <div id="desc-tipo-meta" style="font-size:11px;color:#555;margin:-8px 0 12px;padding:8px 12px;
+        background:rgba(139,0,255,0.05);border-radius:8px;border-left:2px solid var(--accent)"></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Cor</label>
+          <input type="color" class="form-control" id="f-mcor"
+            value="${m ? m.cor : '#8B00FF'}"
+            style="height:42px;padding:4px;cursor:pointer"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Prazo (opcional)</label>
+          <select class="form-control" id="f-mprazo">${mesesOpts}</select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observação (opcional)</label>
+        <input class="form-control" type="text" id="f-mobs"
+          value="${m ? m.obs||'' : ''}"
+          placeholder="Ex: Foco em prospectar 2 clientes novos até dezembro"/>
+      </div>`;
+
+    atualizarDescTipoMeta();
+
+    confirm.onclick = () => {
+      const nome  = document.getElementById('f-mnome').value.trim();
+      const tipo  = document.getElementById('f-mtipo').value;
+      const alvo  = parseFloat(document.getElementById('f-malvo').value);
+      const cor   = document.getElementById('f-mcor').value;
+      const prazo = document.getElementById('f-mprazo').value;
+      const obs   = document.getElementById('f-mobs').value.trim();
+
+      if (!nome) return showToast('Digite o nome da meta.','error');
+      if (!alvo || isNaN(alvo)) return showToast('Informe o valor alvo.','error');
+
+      if (isEdit && m) {
+        Object.assign(m, { nome, tipo, alvo, cor, prazo: prazo === '(Sem prazo)' ? null : prazo, obs });
+        showToast('Meta atualizada!');
+      } else {
+        metas.push({ id: nextId++, nome, tipo, alvo, cor,
+          prazo: prazo === '(Sem prazo)' ? null : prazo, obs, ativa: true });
+        showToast('Meta criada!');
+      }
+      sv('rs2_metas', metas);
+      closeModal();
+      renderAll();
+    };
+  }
+
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
+
+// ═══════════════════════════════════════════
+// NAVEGAÇÃO
+// ═══════════════════════════════════════════
+const PAGE_TITLES={dashboard:'Dashboard',entradas:'Entradas',contratos:'Contratos & Parcelas',saidas:'Saídas',meta:'Metas',clientes:'Clientes',fornecedores:'Fornecedores',historico:'Histórico',config:'Configurações'};
+
+function goPage(page){
+  const current=document.querySelector('.page.active');
+  const doSwitch=()=>{
+    document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active','page-out'));
+    const ni=document.querySelector(`.nav-item[data-page="${page}"]`);
+    if(ni) ni.classList.add('active');
+    const pg=document.getElementById('page-'+page);
+    if(pg){
+      pg.classList.add('active','page-in');
+      pg.addEventListener('animationend',()=>pg.classList.remove('page-in'),{once:true});
+    }
+    document.getElementById('topbar-title').textContent=PAGE_TITLES[page]||page;
+    if(window.innerWidth<=768){
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('sidebar-overlay').classList.remove('show');
+    }
+    if(page==='config') renderConfig();
+  };
+  if(current && current.id!=='page-'+page){
+    current.classList.add('page-out');
+    setTimeout(doSwitch,150);
+  } else {
+    doSwitch();
+  }
+}
+
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click',()=>goPage(item.dataset.page));
+});
+
+// ═══════════════════════════════════════════
+// ATALHOS DE TECLADO
+// ═══════════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') closeModal();
+  if(e.key==='n'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!document.getElementById('modal-overlay').classList.contains('open')){
+    openModal('entrada');
+  }
+});
+
+// ═══════════════════════════════════════════
+// RENDER ALL
+// ═══════════════════════════════════════════
+function renderAll(){
+  renderDashboard();
+  renderEntradas();
+  renderContratos();
+  renderSaidas();
+  renderMeta();
+  renderClientes();
+  renderFornecedores();
+  renderHistorico();
+}
+
+// INIT
+function formatDateTop(d){
+  const dias=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return `${dias[d.getDay()]}, ${String(d.getDate()).padStart(2,'0')} ${meses[d.getMonth()]} ${d.getFullYear()}`;
+}
+document.getElementById('topbar-date').textContent=formatDateTop(new Date());
+
+// ═══════════════════════════════════════════
+// STATUS DE CONEXÃO
+// ═══════════════════════════════════════════
+function atualizarStatusConexao(online){
+  const topbar = document.querySelector('.topbar-right');
+  const existente = document.getElementById('conexao-status');
+  if (existente) existente.remove();
+
+  const dot = document.createElement('div');
+  dot.id = 'conexao-status';
+  dot.title = online ? 'Conectado ao Firebase — dados sincronizados' : 'Modo offline — dados salvos localmente';
+  dot.style.cssText = `
+    width: 8px; height: 8px; border-radius: 50%;
+    background: ${online ? '#00C864' : '#FFB800'};
+    box-shadow: 0 0 6px ${online ? '#00C864' : '#FFB800'};
+    flex-shrink: 0;
+    cursor: default;
+  `;
+  topbar.prepend(dot);
+}
+
+// ═══════════════════════════════════════════
+// INICIALIZAÇÃO
+// ═══════════════════════════════════════════
+async function inicializar(){
+  // Tenta carregar dados do Firebase
+  if (window.__db) {
+    try {
+      const snap = await window.__dbGet(
+        window.__dbChild(window.__dbRef(window.__db), 'rafa_financeiro')
+      );
+      if (snap.exists()) {
+        const dados = snap.val();
+        if (dados.entradas)  { _cache['rs2_entradas']  = dados.entradas;  }
+        if (dados.contratos) { _cache['rs2_contratos'] = dados.contratos; }
+        if (dados.saidas)    { _cache['rs2_saidas']    = dados.saidas;    }
+        if (dados.clientes)  { _cache['rs2_clientes']  = dados.clientes;  }
+        if (dados.fornecedores) { _cache['rs2_fornecedores'] = dados.fornecedores; }
+        if (dados.metas)     { _cache['rs2_metas']     = dados.metas;     }
+        if (dados.config)    { _cache['rs2_config']    = dados.config;    }
+      }
+    } catch(err) {
+      console.warn('Firebase read error — usando dados locais:', err);
+    }
+  }
+
+  // Carrega estado (agora do cache, que foi populado pelo Firebase ou localStorage)
+  entradas     = ld('rs2_entradas',     ENTRADAS_SEED);
+  contratos    = ld('rs2_contratos',    CONTRATOS_SEED);
+  saidas       = ld('rs2_saidas',       SAIDAS_SEED);
+  clientes     = ld('rs2_clientes',     CLIENTES_SEED);
+  fornecedores = ld('rs2_fornecedores', FORNECEDORES_SEED);
+  metas        = ld('rs2_metas',        METAS_SEED);
+  cfg       = ld('rs2_config',    CONFIG_SEED);
+  cfg       = Object.assign({}, CONFIG_SEED, cfg);
+  cfg.coresEntrada = Object.assign({}, CORES_ENTRADA_DEFAULT, cfg.coresEntrada || {});
+  cfg.tiposFornecedor = cfg.tiposFornecedor || CONFIG_SEED.tiposFornecedor;
+  cfg.coresFornecedor = Object.assign({}, CONFIG_SEED.coresFornecedor, cfg.coresFornecedor || {});
+  cfg.tiposCliente = cfg.tiposCliente || CONFIG_SEED.tiposCliente;
+  cfg.servicosPrestados = cfg.servicosPrestados || CONFIG_SEED.servicosPrestados;
+
+  nextId = Math.max(100,
+    ...entradas.map(e => e.id),
+    ...contratos.map(c => c.id),
+    ...saidas.map(s => s.id),
+    ...clientes.map(c => c.id),
+    ...fornecedores.map(f => f.id),
+    ...metas.map(m => m.id)
+  ) + 1;
+
+  aplicarTema();
+  migrarDadosAntigos();
+  renderAll();
+  wireChartModeBtns();
+
+  // Mostra indicador de conexão
+  atualizarStatusConexao(!!window.__db);
+}
+
+// Aguarda o Firebase estar pronto, então inicializa
+if (window.__firebaseReady) {
+  inicializar();
+} else {
+  window.__onFirebaseReady = inicializar;
+  // Timeout de segurança: se Firebase não carregar em 3s, inicia offline
+  setTimeout(() => {
+    if (typeof window.__onFirebaseReady === 'function') {
+      console.warn('Firebase timeout — iniciando em modo offline');
+      window.__onFirebaseReady = null;
+      inicializar();
+    }
+  }, 3000);
+}
+</script>
+</body>
+</html>
