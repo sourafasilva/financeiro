@@ -511,6 +511,17 @@
 
     <!-- HISTÓRICO -->
     <div class="page" id="page-historico">
+      <div class="section-header" style="margin-top:0">
+        <div class="section-title">Resumo Anual</div>
+        <select id="resumo-ano-select" class="form-control" style="width:auto" onchange="renderResumoAnual()"></select>
+      </div>
+      <div id="resumo-anual-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px"></div>
+      <div class="chart-card" style="margin-bottom:24px">
+        <div class="chart-title">Faturamento mês a mês — <span id="resumo-ano-titulo"></span></div>
+        <div style="position:relative;height:240px">
+          <canvas id="chart-resumo-anual"></canvas>
+        </div>
+      </div>
       <div class="section-header"><div class="section-title">Histórico 2025 + 2026</div></div>
       <div class="table-card"><div class="table-scroll">
         <table><thead><tr><th>Mês</th><th>Total</th><th id="th-fixa">Cliente Fixo</th><th>FOTOP</th><th>Evento</th><th>Variável</th><th id="th-familiar">Familiar</th><th>% Fixa</th></tr></thead>
@@ -874,71 +885,120 @@ const METAS_SEED = [
 ];
 
 const TIPOS_META = {
+
   renda_fixa_liquida: {
     label: "Renda Fixa Líquida",
-    desc: "Soma do valor líquido de todos os clientes Fixos ativos",
+    desc: "Soma do valor líquido mensal de todos os clientes Fixos ativos (após custos com fornecedores). Configure o 'Valor líquido/mês' em cada cliente.",
     unidade: "R$",
-    calcular: () => {
-      return clientes
-        .filter(c => clienteEhFixo(c) && c.status === 'Ativo')
-        .reduce((s, c) => s + (c.liquido > 0 ? c.liquido : (c.atual || 0)), 0);
+    calcular: (metaObj) => {
+      const clientesFixos = clientes.filter(c => clienteEhFixo(c) && c.status === 'Ativo');
+      if(clientesFixos.length === 0) return 0;
+      return clientesFixos.reduce((s, c) => {
+        const val = (c.liquido > 0) ? c.liquido : (c.atual || 0);
+        return s + val;
+      }, 0);
     }
   },
+
   renda_fixa_bruta: {
     label: "Renda Fixa Bruta",
-    desc: "Soma do valor bruto de todos os clientes Fixos ativos",
+    desc: "Soma do valor bruto mensal de todos os clientes Fixos ativos, antes de descontar custos com fornecedores.",
     unidade: "R$",
-    calcular: () => {
-      return clientes
-        .filter(c => clienteEhFixo(c) && c.status === 'Ativo')
-        .reduce((s, c) => s + (c.atual || 0), 0);
+    calcular: (metaObj) => {
+      const clientesFixos = clientes.filter(c => clienteEhFixo(c) && c.status === 'Ativo');
+      return clientesFixos.reduce((s, c) => s + (c.atual || 0), 0);
     }
   },
-  faturamento_mensal: {
-    label: "Faturamento Mensal Total",
-    desc: "Média de faturamento bruto nos últimos 3 meses",
+
+  faturamento_liquido_periodo: {
+    label: "Faturamento Líquido do Mês",
+    desc: "Soma de TODAS as entradas do mês escolhido (fixos, avulsos, eventos, contratos — todos os tipos), incluindo pendentes. Subtrai custos de fornecedores daquele mês.",
     unidade: "R$",
-    calcular: () => {
-      const ultimos3 = cfg.meses.slice(-3);
-      const totais = ultimos3.map(m =>
-        entradas
-          .filter(e => e.mes === m && (!e.status_pgto || e.status_pgto === 'Recebido'))
-          .reduce((s, e) => s + e.val, 0)
-      );
-      return totais.length > 0 ? Math.round(totais.reduce((s,v) => s+v, 0) / totais.length) : 0;
+    calcular: (metaObj) => {
+      const mes = metaObj && metaObj.mesReferencia;
+      if(!mes) return 0;
+      const totalEntradas = entradas
+        .filter(e => e.mes === mes)
+        .reduce((s, e) => s + (e.val || 0), 0);
+      const totalCustos = saidas
+        .filter(s => s.tipo_saida === 'projeto' && s.mes === mes)
+        .reduce((s, x) => s + (x.val || 0), 0);
+      return totalEntradas - totalCustos;
     }
   },
+
+  faturamento_bruto_periodo: {
+    label: "Faturamento Bruto do Mês",
+    desc: "Soma de TODAS as entradas do mês escolhido (todos os tipos de cliente), incluindo pendentes. Não desconta custos de fornecedores.",
+    unidade: "R$",
+    calcular: (metaObj) => {
+      const mes = metaObj && metaObj.mesReferencia;
+      if(!mes) return 0;
+      return entradas
+        .filter(e => e.mes === mes)
+        .reduce((s, e) => s + (e.val || 0), 0);
+    }
+  },
+
   margem_real: {
     label: "Margem Real Mínima",
-    desc: "Percentual do faturamento que fica após custos de projeto",
+    desc: "Percentual do faturamento que fica após pagar fornecedores, calculado para o mês atual real.",
     unidade: "%",
-    calcular: () => {
-      const mesAtual = cfg.meses[cfg.meses.length - 1];
+    calcular: (metaObj) => {
+      const mes = mesAtualDoSistema();
       const receitaMes = entradas
-        .filter(e => e.mes === mesAtual && (!e.status_pgto || e.status_pgto === 'Recebido'))
+        .filter(e => e.mes === mes && (!e.status_pgto || e.status_pgto === 'Recebido'))
         .reduce((s, e) => s + e.val, 0);
       const custosMes = saidas
-        .filter(s => s.tipo_saida === 'projeto' && s.mes === mesAtual)
+        .filter(s => s.tipo_saida === 'projeto' && s.mes === mes)
         .reduce((s, x) => s + x.val, 0);
-      if (receitaMes === 0) return 0;
+      if(receitaMes === 0) return 0;
       return Math.round(((receitaMes - custosMes) / receitaMes) * 100);
     }
   },
+
   meta_crescimento: {
     label: "Crescimento Mensal",
-    desc: "Percentual de crescimento em relação ao mês anterior",
+    desc: "Percentual de crescimento do faturamento recebido em relação ao mês anterior. Ignora meses futuros.",
     unidade: "%",
-    calcular: () => {
-      const meses = cfg.meses;
-      if (meses.length < 2) return 0;
-      const mesAtual  = meses[meses.length - 1];
-      const mesAnterior = meses[meses.length - 2];
-      const atual   = entradas.filter(e => e.mes === mesAtual && (!e.status_pgto || e.status_pgto === 'Recebido')).reduce((s,e)=>s+e.val,0);
-      const anterior = entradas.filter(e => e.mes === mesAnterior && (!e.status_pgto || e.status_pgto === 'Recebido')).reduce((s,e)=>s+e.val,0);
-      if (anterior === 0) return 0;
+    calcular: (metaObj) => {
+      const mesAtual = mesAtualDoSistema();
+      const idxAtual = mesParaIndice(mesAtual);
+      const mesesPassados = cfg.meses.filter(m => mesParaIndice(m) <= idxAtual);
+      if(mesesPassados.length < 2) return 0;
+      const mesRef      = mesesPassados[mesesPassados.length - 1];
+      const mesAnterior = mesesPassados[mesesPassados.length - 2];
+      const atual = entradas
+        .filter(e => e.mes === mesRef && (!e.status_pgto || e.status_pgto === 'Recebido'))
+        .reduce((s,e) => s+e.val, 0);
+      const anterior = entradas
+        .filter(e => e.mes === mesAnterior && (!e.status_pgto || e.status_pgto === 'Recebido'))
+        .reduce((s,e) => s+e.val, 0);
+      if(anterior === 0) return 0;
       return Math.round(((atual - anterior) / anterior) * 100);
     }
+  },
+
+  faturamento_media_historica: {
+    label: "Média de Faturamento (Histórica)",
+    desc: "Média do faturamento recebido nos últimos 3 meses passados. Útil para acompanhar tendência geral de crescimento.",
+    unidade: "R$",
+    calcular: (metaObj) => {
+      const mesAtual = mesAtualDoSistema();
+      const idxAtual = mesParaIndice(mesAtual);
+      const mesesPassados = cfg.meses
+        .filter(m => mesParaIndice(m) <= idxAtual)
+        .slice(-3);
+      if(mesesPassados.length === 0) return 0;
+      const totais = mesesPassados.map(m =>
+        entradas
+          .filter(e => e.mes === m && (!e.status_pgto || e.status_pgto === 'Recebido'))
+          .reduce((s,e) => s+e.val, 0)
+      );
+      return Math.round(totais.reduce((s,v) => s+v, 0) / totais.length);
+    }
   }
+
 };
 
 const CONFIG_SEED = {
@@ -1103,24 +1163,57 @@ function migrarDadosAntigos(){
     if(!s.status_pgto){ s.status_pgto='Pago'; mudouSaidas=true; }
   });
   if(mudouSaidas) sv('rs2_saidas', saidas);
+
+  // Migrar tipo de meta antigo faturamento_mensal → faturamento_media_historica
+  let mudouMetas=false;
+  metas.forEach(m=>{
+    if(m.tipo==='faturamento_mensal'){ m.tipo='faturamento_media_historica'; mudouMetas=true; }
+  });
+  if(mudouMetas) sv('rs2_metas', metas);
+}
+
+// ═══════════════════════════════════════════
+// SISTEMA DE MESES — funções centrais (única fonte de verdade)
+// ═══════════════════════════════════════════
+const MESES_NOMES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+const MESES_MAP = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
+
+function mesParaIndice(mesStr){
+  const m=mesStr.slice(0,3), a=parseInt(mesStr.slice(4));
+  return (2000+a)*12 + (MESES_MAP[m]||0);
+}
+function indiceParaMes(indice){
+  const ano=Math.floor(indice/12);
+  const mesIdx=((indice%12)+12)%12;
+  return MESES_NOMES[mesIdx]+'/'+String(ano).slice(2);
+}
+function avancarMeses(mesInicial, quantidade){
+  return indiceParaMes(mesParaIndice(mesInicial)+quantidade);
+}
+function mesAtualDoSistema(){
+  const hoje=new Date();
+  return MESES_NOMES[hoje.getMonth()]+'/'+String(hoje.getFullYear()).slice(2);
+}
+function adicionarMesSeNaoExiste(mesNome){
+  if(cfg.meses.includes(mesNome)) return false;
+  cfg.meses.push(mesNome);
+  cfg.meses.sort((a,b)=>mesParaIndice(a)-mesParaIndice(b));
+  sv('rs2_config', cfg);
+  gerarLancamentosRecorrentes();
+  return true;
 }
 
 // ═══════════════════════════════════════════
 // RECORRÊNCIAS — geração automática
 // ═══════════════════════════════════════════
 function gerarLancamentosRecorrentes(){
-  const mesesMap={JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
-  function mesIndex(mesStr){
-    const m=mesStr.slice(0,3), a=parseInt(mesStr.slice(4));
-    return a*12+(mesesMap[m]||0);
-  }
   let gerouAlgo=false;
   (recorrencias||[]).forEach(rec=>{
     if(!rec.ativa && !rec.mesFim) return;
-    const inicioIdx=mesIndex(rec.mesInicio);
-    const fimIdx=rec.mesFim ? mesIndex(rec.mesFim) : Infinity;
+    const inicioIdx=mesParaIndice(rec.mesInicio);
+    const fimIdx=rec.mesFim ? mesParaIndice(rec.mesFim) : Infinity;
     cfg.meses.forEach(mes=>{
-      const idx=mesIndex(mes);
+      const idx=mesParaIndice(mes);
       if(idx<inicioIdx) return;
       if(idx>fimIdx) return;
       if((rec.mesesPulados||[]).includes(mes)) return;
@@ -1242,11 +1335,10 @@ function askDelete(btn,fn){
 // ═══════════════════════════════════════════
 // PREVISÃO / VENCIMENTO
 // ═══════════════════════════════════════════
-const MESES_ABREV={JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
 function parsePrevisao(prev){
   if(!prev) return null;
   const [m,a]=prev.split('/');
-  const mi=MESES_ABREV[m.toUpperCase()];
+  const mi=MESES_MAP[m.toUpperCase()];
   if(mi===undefined||!a) return null;
   return new Date(2000+Number(a),mi,1);
 }
@@ -1291,6 +1383,66 @@ function aplicarTema(){
   } else {
     wrap.innerHTML = `<div class="logo-icon-text" id="logo-text-icon" style="background:${cor}"><span id="logo-initials">${cfg.iniciais||'RS'}</span><div class="logo-glitch" id="logo-glitch">${cfg.iniciais||'RS'}</div></div>`;
   }
+}
+
+// ═══════════════════════════════════════════
+// NAVEGAÇÃO DE MESES FUTUROS
+// ═══════════════════════════════════════════
+function mesEhFuturo(mesStr){
+  return mesParaIndice(mesStr) > mesParaIndice(mesAtualDoSistema());
+}
+
+function navegarProximoMes(){
+  const base = dashboardPeriod ? dashboardPeriod : cfg.meses[cfg.meses.length - 1];
+  const proximoMes = avancarMeses(base, 1);
+  adicionarMesSeNaoExiste(proximoMes);
+  dashboardPeriod = proximoMes;
+  renderAll();
+}
+
+function navegarMesAnterior(){
+  const idx = dashboardPeriod ? cfg.meses.indexOf(dashboardPeriod) : cfg.meses.length;
+  if(idx > 0){
+    dashboardPeriod = cfg.meses[idx - 1];
+    renderAll();
+  }
+}
+
+function abrirSeletorMesLivre(){
+  const html = `
+    <div id="seletor-mes-overlay" style="position:fixed;inset:0;z-index:300;
+      background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);
+      display:flex;align-items:center;justify-content:center"
+      onclick="if(event.target===this)document.getElementById('seletor-mes-overlay').remove()">
+      <div style="background:var(--bg2);border-radius:16px;border:1px solid rgba(139,0,255,0.2);
+        padding:24px;min-width:280px">
+        <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:16px">📅 Ir para mês</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <select class="form-control" id="seletor-mes-nome" style="flex:1">
+            ${['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ']
+              .map(m => `<option>${m}</option>`).join('')}
+          </select>
+          <input class="form-control" type="number" id="seletor-mes-ano"
+            value="${new Date().getFullYear()}" min="2020" max="2099" style="width:90px"/>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" style="flex:1"
+            onclick="document.getElementById('seletor-mes-overlay').remove()">Cancelar</button>
+          <button class="btn btn-primary btn-sm" style="flex:1" onclick="confirmarSeletorMes()">Ir</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function confirmarSeletorMes(){
+  const mes  = document.getElementById('seletor-mes-nome').value;
+  const ano  = document.getElementById('seletor-mes-ano').value;
+  const mesStr = mes + '/' + String(ano).slice(2);
+  adicionarMesSeNaoExiste(mesStr);
+  dashboardPeriod = mesStr;
+  document.getElementById('seletor-mes-overlay').remove();
+  renderAll();
 }
 
 // ═══════════════════════════════════════════
@@ -1443,14 +1595,42 @@ function wireChartModeBtns(){
 }
 
 function renderDashboard(){
-  const mesesTodos = getMesesAtivos();
-  const meses = dashboardPeriod ? mesesTodos.filter(m=>m===dashboardPeriod) : mesesTodos;
+  const mesesComDados = getMesesAtivos();
+  const todosMeses = cfg.meses;
+  const ehMesFuturo = !!(dashboardPeriod && mesEhFuturo(dashboardPeriod));
+  const meses = dashboardPeriod
+    ? todosMeses.filter(m=>m===dashboardPeriod)
+    : mesesComDados;
   const todos = meses.map(m=>calcMes(m));
 
-  document.getElementById('period-chips').innerHTML = [
-    `<div class="period-chip ${!dashboardPeriod?'active':''}" onclick="setDashboardPeriod('')">Todos</div>`,
-    ...mesesTodos.map(m=>`<div class="period-chip ${dashboardPeriod===m?'active':''}" onclick="setDashboardPeriod('${m}')">${m}</div>`)
-  ].join('');
+  const bannerFuturo = ehMesFuturo ? `
+    <div style="background:rgba(255,184,0,0.08);border:1px solid rgba(255,184,0,0.2);
+      border-radius:10px;padding:12px 16px;margin-top:10px;
+      display:flex;align-items:center;gap:10px">
+      <span style="font-size:16px">📅</span>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:#FFB800">Mês futuro — ${dashboardPeriod}</div>
+        <div style="font-size:11px;color:#666;margin-top:2px">
+          Valores mostrados são projeções. Entradas pendentes e despesas recorrentes previstas.
+        </div>
+      </div>
+    </div>` : '';
+
+  document.getElementById('period-chips').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="navegarMesAnterior()" title="Mês anterior" style="font-size:16px;line-height:1;padding:4px 10px">‹</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <div class="period-chip ${!dashboardPeriod?'active':''}" onclick="setDashboardPeriod('')">Todos</div>
+        ${todosMeses.map(m=>{
+          const futuro = mesEhFuturo(m);
+          const ativo = dashboardPeriod===m ? 'active' : '';
+          return `<div class="period-chip ${ativo}" onclick="setDashboardPeriod('${m}')"
+            style="${futuro&&!ativo?'opacity:0.6;border-style:dashed':''}">${m}</div>`;
+        }).join('')}
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="navegarProximoMes()" title="Próximo mês" style="font-size:16px;line-height:1;padding:4px 10px">›</button>
+      <button class="btn btn-ghost btn-sm" onclick="abrirSeletorMesLivre()" title="Ir para qualquer mês" style="padding:4px 10px">📅</button>
+    </div>${bannerFuturo}`;
 
   const totalAcum = todos.reduce((s,m)=>s+m.total,0);
   const totalPrevistoAcum = todos.reduce((s,m)=>s+(m.totalPrevisto||0),0);
@@ -1476,7 +1656,7 @@ function renderDashboard(){
   const primeiraMeta = metasAtivas[0];
   if(primeiraMeta && TIPOS_META[primeiraMeta.tipo]){
     const tipoPM = TIPOS_META[primeiraMeta.tipo];
-    const atualPM = tipoPM.calcular();
+    const atualPM = tipoPM.calcular(primeiraMeta);
     const pctPM = primeiraMeta.alvo>0 ? Math.min(Math.round(atualPM/primeiraMeta.alvo*100),100) : 0;
     document.getElementById('sm-meta-label').textContent = primeiraMeta.nome;
     document.getElementById('sm-meta-val').textContent = `${tipoPM.unidade==='%'?atualPM+'%':R(atualPM)} / ${tipoPM.unidade==='%'?primeiraMeta.alvo+'%':R(primeiraMeta.alvo)}`;
@@ -1490,7 +1670,7 @@ function renderDashboard(){
   const miniMetas = metasAtivas.slice(0,2).map(m=>{
     const tipo = TIPOS_META[m.tipo];
     if(!tipo) return '';
-    const atual = tipo.calcular();
+    const atual = tipo.calcular(m);
     const pctM = m.alvo>0 ? Math.min(Math.round(atual/m.alvo*100),100) : 0;
     const cor = m.cor||'#8B00FF';
     return `
@@ -1619,7 +1799,7 @@ function renderEntradas(){
     return `
     <tr class="${pendente?'pendente':''}"><td><span class="badge badge-gray">${e.mes}</span></td>
     <td style="color:var(--text3);font-size:12px">${fmtData(e.data)}</td>
-    <td>${pendente?'<span class="badge badge-yellow">⏳ Pendente</span>':'<span class="badge badge-green">✓ Recebido</span>'}</td>
+    <td onclick="toggleStatusEntrada(${e.id})" style="cursor:pointer" title="Clique para alternar status">${pendente?'<span class="badge badge-yellow">⏳ Pendente</span>':'<span class="badge badge-green">✓ Recebido</span>'}</td>
     <td>
       <div style="font-weight:600;color:#fff">${e.cliente}</div>
       ${e.desc ? `<div style="font-size:11px;color:#555;margin-top:2px">${e.desc}</div>` : ''}
@@ -1627,20 +1807,22 @@ function renderEntradas(){
     <td>${tipoServicoBadge(e.tipoServico)}</td>
     <td>${catBadge(e.cat)}</td>
     <td class="money">${R(e.val)}</td>
-    <td><div class="row-actions">${pendente?`<button class="btn btn-success btn-sm" onclick="marcarRecebido(${e.id})">✓ Marcar recebido</button>`:''}<button class="btn btn-ghost btn-sm" onclick="editEntrada(${e.id})">✎</button><button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delEntrada(${e.id}))">✕</button></div></td></tr>`;
+    <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="editEntrada(${e.id})">✎</button><button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delEntrada(${e.id}))">✕</button></div></td></tr>`;
   }).join('')
     ||(q?`<tr><td colspan="8"><div class="empty"><div class="empty-icon">🔍</div>Nenhum resultado para "${searchEl.value}"</div></td></tr>`:'<tr><td colspan="8"><div class="empty"><div class="empty-icon">📭</div>Nenhum lançamento</div></td></tr>');
 }
 function delEntrada(id){entradas=entradas.filter(e=>e.id!==id);sv('rs2_entradas',entradas);renderAll();showToast('Removido.','info');}
 
-function marcarRecebido(id){
+function toggleStatusEntrada(id){
   const e = entradas.find(x=>x.id===id);
   if(!e) return;
-  e.status_pgto = 'Recebido';
-  if(!e.data) e.data = new Date().toISOString().split('T')[0];
+  e.status_pgto = (e.status_pgto==='Pendente') ? 'Recebido' : 'Pendente';
+  if(e.status_pgto==='Recebido' && !e.data) e.data = new Date().toISOString().split('T')[0];
   sv('rs2_entradas', entradas);
   renderAll();
-  if(typeof showToast==='function') showToast(`✓ ${e.cliente} marcado como recebido!`);
+  if(typeof showToast==='function') showToast(e.status_pgto==='Recebido'
+    ? `✓ ${e.cliente} marcado como recebido!`
+    : `⏳ ${e.cliente} voltou para pendente.`);
 }
 
 function wireClienteAutocomplete(scopeEl){
@@ -1770,18 +1952,8 @@ function editEntrada(id){
 
   document.getElementById('f-data').addEventListener('change', function(){
     const d = new Date(this.value+'T00:00:00');
-    const meses = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
-    const mesAno = meses[d.getMonth()]+'/'+String(d.getFullYear()).slice(2);
-    if(!cfg.meses.includes(mesAno)){
-      cfg.meses.push(mesAno);
-      cfg.meses.sort((a,b)=>{
-        const mMap = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
-        const [mA,aA] = [a.slice(0,3),parseInt(a.slice(4))];
-        const [mB,aB] = [b.slice(0,3),parseInt(b.slice(4))];
-        return aA!==aB ? aA-aB : mMap[mA]-mMap[mB];
-      });
-      sv('rs2_config', cfg);
-    }
+    const mesAno = MESES_NOMES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2);
+    adicionarMesSeNaoExiste(mesAno);
     const sel = document.getElementById('f-mes');
     sel.innerHTML = cfg.meses.map(m=>`<option ${m===mesAno?'selected':''}>${m}</option>`).join('');
   });
@@ -1828,16 +2000,22 @@ function renderContratos(){
     <td>${catBadge(c.tipo)}</td>
     <td class="money">${R(c.total)}</td><td style="color:var(--text2)">${c.parcela}</td>
     <td class="money">${R(c.valor)}</td>
-    <td><span class="badge ${c.status==='Recebido'?'badge-green':'badge-yellow'}">${c.status}</span></td>
+    <td onclick="toggleStatusContrato(${c.id})" style="cursor:pointer" title="Clique para alternar status"><span class="badge ${c.status==='Recebido'?'badge-green':'badge-yellow'}">${c.status}</span></td>
     <td>${previsaoBadge(c)}</td>
     <td><div class="row-actions">
-      ${c.status==='Em aberto'?`<button class="btn btn-success btn-sm" onclick="recContrato(${c.id})">✓</button>`:''}
       <button class="btn btn-ghost btn-sm" onclick="editContrato(${c.id})" title="Editar projeto/tipo">📋✎</button>
       <button class="btn btn-ghost btn-sm" onclick="editParcela(${c.id})" title="Editar esta parcela">✎</button>
       <button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delContrato(${c.id}))">✕</button>
     </div></td></tr>`).join('')||'<tr><td colspan="8"><div class="empty"><div class="empty-icon">📋</div>Nenhum contrato</div></td></tr>';
 }
-function recContrato(id){const c=contratos.find(c=>c.id===id);if(c){c.status='Recebido';sv('rs2_contratos',contratos);renderAll();showToast('Parcela marcada como recebida!');}}
+function toggleStatusContrato(id){
+  const c=contratos.find(x=>x.id===id);
+  if(!c) return;
+  c.status = (c.status==='Recebido') ? 'Em aberto' : 'Recebido';
+  sv('rs2_contratos',contratos);
+  renderAll();
+  showToast(c.status==='Recebido' ? 'Parcela marcada como recebida!' : 'Parcela voltou para em aberto.');
+}
 function delContrato(id){contratos=contratos.filter(c=>c.id!==id);sv('rs2_contratos',contratos);renderAll();showToast('Removido.','info');}
 
 function editContrato(id){
@@ -1850,67 +2028,33 @@ function editParcela(id){
 }
 
 function gerarParcelas(total, numParcelas, mesInicial){
-  const mesesMap = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
-  const mesesNomes = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
-
-  const [mesStr, anoStr] = [mesInicial.slice(0,3), parseInt(mesInicial.slice(4))];
-  let mesIdx = mesesMap[mesStr];
-  let ano = 2000 + anoStr;
-
   const valorParcela = Math.floor((total / numParcelas) * 100) / 100;
   const resto = Math.round((total - valorParcela * numParcelas) * 100) / 100;
 
   const parcelas = [];
   for (let i = 0; i < numParcelas; i++) {
     const val = i === numParcelas - 1 ? valorParcela + resto : valorParcela;
-    const mesNome = mesesNomes[mesIdx % 12] + '/' + String(ano + Math.floor(mesIdx / 12)).slice(2);
+    const mesNome = avancarMeses(mesInicial, i);
     parcelas.push({ prev: mesNome, valor: val, status: 'Em aberto', desc: `Parcela ${i+1}/${numParcelas}` });
-    mesIdx++;
   }
   return parcelas;
 }
 
 function gerarParcelasDespesa(valorTotal, numParcelas, mesInicio){
-  const mesesMap={JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
-  const mesesNomes=['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
-  const mesStr=mesInicio.slice(0,3), anoStr=parseInt(mesInicio.slice(4));
-  let mesIdx=mesesMap[mesStr], ano=2000+anoStr;
   const valorParcela=Math.floor((valorTotal/numParcelas)*100)/100;
   const resto=Math.round((valorTotal-valorParcela*numParcelas)*100)/100;
   const parcelas=[];
   for(let i=0;i<numParcelas;i++){
     const val=i===numParcelas-1 ? valorParcela+resto : valorParcela;
-    const mesNome=mesesNomes[mesIdx%12]+'/'+String(ano+Math.floor(mesIdx/12)).slice(2);
-    if(!cfg.meses.includes(mesNome)){
-      cfg.meses.push(mesNome);
-      cfg.meses.sort((a,b)=>{
-        const mMap={JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
-        const[mA,aA]=[a.slice(0,3),parseInt(a.slice(4))];
-        const[mB,aB]=[b.slice(0,3),parseInt(b.slice(4))];
-        return aA!==aB ? aA-aB : mMap[mA]-mMap[mB];
-      });
-      sv('rs2_config',cfg);
-    }
+    const mesNome=avancarMeses(mesInicio, i);
+    adicionarMesSeNaoExiste(mesNome);
     parcelas.push({numero:i+1, mes:mesNome, val, status_pgto:'A pagar'});
-    mesIdx++;
   }
   return parcelas;
 }
 
 function garantirMesesParcelas(parcelas){
-  const mMap = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
-  let mudou=false;
-  parcelas.forEach(p=>{
-    if(!cfg.meses.includes(p.prev)){ cfg.meses.push(p.prev); mudou=true; }
-  });
-  if(mudou){
-    cfg.meses.sort((a,b)=>{
-      const [mA,aA]=[a.slice(0,3),parseInt(a.slice(4))];
-      const [mB,aB]=[b.slice(0,3),parseInt(b.slice(4))];
-      return aA!==aB ? aA-aB : mMap[mA]-mMap[mB];
-    });
-    sv('rs2_config', cfg);
-  }
+  parcelas.forEach(p=>{ adicionarMesSeNaoExiste(p.prev); });
 }
 
 function atualizarPreviewParcelas(){
@@ -2026,7 +2170,7 @@ function renderSaidas(){
             const isRec  = !!s.recorrenciaId;
             return `<tr class="${apagar?'pendente':''}">
               <td><span class="badge badge-gray">${s.mes}</span></td>
-              <td>${apagar
+              <td onclick="toggleStatusSaida(${s.id})" style="cursor:pointer" title="Clique para alternar status">${apagar
                 ? '<span class="badge badge-yellow">⏳ A pagar</span>'
                 : '<span class="badge badge-green">✓ Pago</span>'}</td>
               <td><span class="badge badge-purple">${s.cat}</span></td>
@@ -2037,7 +2181,6 @@ function renderSaidas(){
               <td class="money" style="color:var(--red)">${R(s.val)}</td>
               <td><span class="badge ${s.tipo==='Fixo'?'badge-purple':'badge-yellow'}">${s.tipo||'Fixo'}</span></td>
               <td><div class="row-actions">
-                ${apagar?`<button class="btn btn-success btn-sm" onclick="marcarSaidaPaga(${s.id})">✓ Pago</button>`:''}
                 ${isRec?`<button class="btn btn-ghost btn-sm" title="Pular este mês" onclick="pularMesRecorrencia(${s.id})">⏭</button>`:''}
                 <button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delSaida(${s.id}))">✕</button>
               </div></td>
@@ -2053,13 +2196,15 @@ function renderSaidas(){
 
 function delSaida(id){saidas=saidas.filter(s=>s.id!==id);sv('rs2_saidas',saidas);renderAll();showToast('Removido.','info');}
 
-function marcarSaidaPaga(id){
+function toggleStatusSaida(id){
   const s=saidas.find(x=>x.id===id);
   if(!s) return;
-  s.status_pgto='Pago';
+  s.status_pgto = (s.status_pgto==='A pagar') ? 'Pago' : 'A pagar';
   sv('rs2_saidas',saidas);
   renderAll();
-  showToast(`✓ "${s.desc}" marcado como pago!`);
+  showToast(s.status_pgto==='Pago'
+    ? `✓ "${s.desc}" marcado como pago!`
+    : `⏳ "${s.desc}" voltou para a pagar.`);
 }
 
 function pularMesRecorrencia(saidaId){
@@ -2254,7 +2399,7 @@ function renderMetaCards(){
       const tipo = TIPOS_META[m.tipo];
       if (!tipo) return '';
 
-      const atual   = tipo.calcular();
+      const atual   = tipo.calcular(m);
       const alvo    = m.alvo;
       const pct     = alvo > 0 ? Math.min(Math.round(atual / alvo * 100), 100) : 0;
       const falta   = Math.max(alvo - atual, 0);
@@ -2269,16 +2414,24 @@ function renderMetaCards(){
 
       let prazoHtml = '';
       if (m.prazo) {
-        const mesesMap = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
-        const mesAtualIdx = cfg.meses.length - 1;
-        const mesAtualStr = cfg.meses[mesAtualIdx];
-        const [mA, aA] = [mesAtualStr.slice(0,3), parseInt(mesAtualStr.slice(4))];
-        const [mP, aP] = [m.prazo.slice(0,3), parseInt(m.prazo.slice(4))];
-        const mesesRestantes = (aP - aA) * 12 + (mesesMap[mP] - mesesMap[mA]);
+        const mesAtualStr = mesAtualDoSistema();
+        const mesesRestantes = mesParaIndice(m.prazo) - mesParaIndice(mesAtualStr);
         prazoHtml = `<div style="font-size:11px;color:#555;margin-top:4px">
           ⏱ Prazo: ${m.prazo} — ${mesesRestantes > 0 ? mesesRestantes + ' meses restantes' : mesesRestantes === 0 ? 'Este mês!' : 'Prazo encerrado'}
         </div>`;
       }
+
+      const avisoZero = atual === 0 ? `
+        <div style="font-size:10px;color:#555;margin-top:6px;padding:6px 8px;
+          background:rgba(255,255,255,0.03);border-radius:6px">
+          ℹ️ ${
+            m.tipo === 'renda_fixa_liquida'
+              ? 'Configure o "Valor líquido/mês" nos clientes Fixos ativos'
+              : (m.tipo === 'faturamento_liquido_periodo' || m.tipo === 'faturamento_bruto_periodo')
+              ? `Nenhuma entrada encontrada em ${m.mesReferencia || 'mês não definido'}`
+              : 'Sem dados suficientes para calcular'
+          }
+        </div>` : '';
 
       let simuladorHtml = '';
       if (m.tipo === 'renda_fixa_liquida' && pct < 100) {
@@ -2305,6 +2458,7 @@ function renderMetaCards(){
                 ${tipo.label}
               </div>
               <div style="font-size:16px;font-weight:700;color:#fff">${m.nome}</div>
+              ${m.mesReferencia ? `<div style="font-size:10px;color:#555;margin-top:2px">📅 Referente a ${m.mesReferencia}</div>` : ''}
               ${m.obs ? `<div style="font-size:11px;color:#444;margin-top:2px">${m.obs}</div>` : ''}
             </div>
             <div style="display:flex;gap:6px">
@@ -2338,6 +2492,7 @@ function renderMetaCards(){
 
           ${prazoHtml}
           ${simuladorHtml}
+          ${avisoZero}
         </div>`;
     }).join('') ||
     `<div class="empty" style="grid-column:1/-1">
@@ -2381,7 +2536,7 @@ function renderMetaHistorico(){
   if (chartMetaHistorico) chartMetaHistorico.destroy();
 
   const labels = cfg.meses;
-  const dadosMes = labels.map(() => tipo.calcular());
+  const dadosMes = labels.map(() => tipo.calcular(m));
 
   const cor = m.cor || '#8B00FF';
 
@@ -2523,9 +2678,14 @@ function renderMetaDetalhes(){
 function atualizarDescTipoMeta(){
   const sel  = document.getElementById('f-mtipo');
   const desc = document.getElementById('desc-tipo-meta');
-  if (!sel || !desc) return;
+  const campoMes = document.getElementById('campo-mes-referencia');
+  if(!sel || !desc) return;
   const tipo = TIPOS_META[sel.value];
   desc.textContent = tipo ? tipo.desc : '';
+  if(campoMes){
+    const precisaMes = ['faturamento_liquido_periodo','faturamento_bruto_periodo'];
+    campoMes.style.display = precisaMes.includes(sel.value) ? 'block' : 'none';
+  }
 }
 
 function editMeta(id){ openModal._editId = id; openModal('meta-edit'); }
@@ -2890,10 +3050,103 @@ function renderFornecedores(){
 }
 
 // ═══════════════════════════════════════════
+// RESUMO ANUAL
+// ═══════════════════════════════════════════
+function calcularResumoAnual(ano){
+  const mesesDoAno = cfg.meses.filter(m => parseInt(m.slice(4)) === (ano - 2000));
+
+  const entradasAno = entradas.filter(e =>
+    mesesDoAno.includes(e.mes) && (!e.status_pgto || e.status_pgto === 'Recebido'));
+  const custosProjetoAno = saidas.filter(s =>
+    s.tipo_saida === 'projeto' && mesesDoAno.includes(s.mes));
+  const despesasOpAno = saidas.filter(s =>
+    (!s.tipo_saida || s.tipo_saida === 'operacional') && mesesDoAno.includes(s.mes) &&
+    (!s.status_pgto || s.status_pgto === 'Pago'));
+
+  const faturamentoBruto = entradasAno.reduce((s,e) => s+e.val, 0);
+  const totalCustosProjeto = custosProjetoAno.reduce((s,x) => s+x.val, 0);
+  const totalDespesasOp = despesasOpAno.reduce((s,x) => s+x.val, 0);
+  const margemReal = faturamentoBruto - totalCustosProjeto;
+  const lucroLiquido = margemReal - totalDespesasOp;
+
+  const porMes = mesesDoAno.map(mes => {
+    const entradasMes = entradas.filter(e => e.mes === mes && (!e.status_pgto || e.status_pgto === 'Recebido'));
+    return { mes, total: entradasMes.reduce((s,e)=>s+e.val, 0) };
+  });
+
+  return {
+    ano, mesesDoAno, faturamentoBruto, totalCustosProjeto,
+    totalDespesasOp, margemReal, lucroLiquido, porMes,
+    melhorMes: porMes.reduce((a,b) => b.total > a.total ? b : a, {total:0}),
+    mediaFaturamento: porMes.length > 0
+      ? Math.round(faturamentoBruto / porMes.length) : 0
+  };
+}
+
+function renderResumoAnualSelect(){
+  const anos = [...new Set(cfg.meses.map(m => 2000 + parseInt(m.slice(4))))].sort();
+  const sel = document.getElementById('resumo-ano-select');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = anos.map(a => `<option value="${a}">${a}</option>`).join('');
+  sel.value = anos.includes(parseInt(cur)) ? cur : anos[anos.length - 1];
+}
+
+let chartResumoAnual = null;
+
+function renderResumoAnual(){
+  const sel = document.getElementById('resumo-ano-select');
+  if (!sel || !sel.value) return;
+  const ano = parseInt(sel.value);
+  const r = calcularResumoAnual(ano);
+
+  document.getElementById('resumo-ano-titulo').textContent = ano;
+
+  document.getElementById('resumo-anual-cards').innerHTML = `
+    <div class="card"><div class="card-dot"></div><div class="card-label">Faturamento Bruto</div>
+      <div class="card-value">${R(r.faturamentoBruto)}</div>
+      <div class="card-sub">média ${R(r.mediaFaturamento)}/mês</div></div>
+    <div class="card"><div class="card-dot"></div><div class="card-label">Margem Real</div>
+      <div class="card-value">${R(r.margemReal)}</div>
+      <div class="card-sub">após custos de equipe</div></div>
+    <div class="card"><div class="card-dot"></div><div class="card-label">Lucro Líquido</div>
+      <div class="card-value">${R(r.lucroLiquido)}</div>
+      <div class="card-sub">após todas as despesas</div></div>
+    <div class="card"><div class="card-dot"></div><div class="card-label">Melhor Mês</div>
+      <div class="card-value">${r.melhorMes.mes || '—'}</div>
+      <div class="card-sub">${R(r.melhorMes.total||0)}</div></div>`;
+
+  const ctx = document.getElementById('chart-resumo-anual');
+  if (chartResumoAnual) chartResumoAnual.destroy();
+  chartResumoAnual = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: r.porMes.map(m => m.mes),
+      datasets: [{
+        data: r.porMes.map(m => m.total),
+        backgroundColor: cfg.cor || '#8B00FF',
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#666', font: { size: 11 } }, grid: { display: false } },
+        y: { ticks: { color: '#666', font: { size: 11 }, callback: v => 'R$'+Math.round(v/1000)+'k' },
+             grid: { color: 'rgba(255,255,255,0.06)' } }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════
 // RENDER HISTÓRICO
 // ═══════════════════════════════════════════
 function renderHistorico(){
   document.getElementById('th-familiar').textContent=cfg.sub&&cfg.sub.includes('Sabrina')?'Sabrina':'Familiar';
+  renderResumoAnualSelect();
+  renderResumoAnual();
   const meses26=getMesesAtivos().map(m=>calcMes(m));
   const todos=[...HISTORICO_FIXO.map(h=>({mes:h.mes,total:h.receita,fixa:h.fixa,fotop:h.fotop,evento:h.evento,variavel:h.variavel,sabrina:h.sabrina})),...meses26];
   document.getElementById('tb-historico').innerHTML=todos.map(d=>{
@@ -3167,8 +3420,8 @@ function removeMes(i){if(!confirm('Remover mês?'))return;cfg.meses.splice(i,1);
 function adicionarMes(){
   const v=document.getElementById('novo-mes').value.trim().toUpperCase();
   if(!v||cfg.meses.includes(v))return;
-  cfg.meses.push(v);sv('rs2_config',cfg);
-  document.getElementById('novo-mes').value='';renderConfig();
+  adicionarMesSeNaoExiste(v);
+  document.getElementById('novo-mes').value='';renderConfig();renderAll();
 }
 
 // ═══════════════════════════════════════════
@@ -3323,18 +3576,8 @@ function openModal(type){
     document.getElementById('f-data').value = new Date().toISOString().split('T')[0];
     document.getElementById('f-data').addEventListener('change', function(){
       const d = new Date(this.value + 'T00:00:00');
-      const mesesAbrev = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
-      const mesAno = mesesAbrev[d.getMonth()] + '/' + String(d.getFullYear()).slice(2);
-      if (!cfg.meses.includes(mesAno)) {
-        cfg.meses.push(mesAno);
-        cfg.meses.sort((a, b) => {
-          const mMap = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
-          const [mA, aA] = [a.slice(0,3), parseInt(a.slice(4))];
-          const [mB, aB] = [b.slice(0,3), parseInt(b.slice(4))];
-          return aA !== aB ? aA - aB : mMap[mA] - mMap[mB];
-        });
-        sv('rs2_config', cfg);
-      }
+      const mesAno = MESES_NOMES[d.getMonth()] + '/' + String(d.getFullYear()).slice(2);
+      adicionarMesSeNaoExiste(mesAno);
       const sel = document.getElementById('f-mes');
       sel.innerHTML = cfg.meses.map(m => `<option ${m === mesAno ? 'selected' : ''}>${m}</option>`).join('');
     });
@@ -3848,6 +4091,12 @@ function openModal(type){
       </div>
       <div id="desc-tipo-meta" style="font-size:11px;color:#555;margin:-8px 0 12px;padding:8px 12px;
         background:rgba(139,0,255,0.05);border-radius:8px;border-left:2px solid var(--accent)"></div>
+      <div class="form-group" id="campo-mes-referencia" style="display:none">
+        <label class="form-label">Mês de referência</label>
+        <select class="form-control" id="f-mmesref">
+          ${cfg.meses.map(mm => `<option ${(m&&m.mesReferencia?m.mesReferencia===mm:mm===mesAtualDoSistema()) ? 'selected' : ''}>${mm}</option>`).join('')}
+        </select>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Cor</label>
@@ -3876,16 +4125,20 @@ function openModal(type){
       const cor   = document.getElementById('f-mcor').value;
       const prazo = document.getElementById('f-mprazo').value;
       const obs   = document.getElementById('f-mobs').value.trim();
+      const precisaMesRef = ['faturamento_liquido_periodo','faturamento_bruto_periodo'];
+      const mesReferencia = precisaMesRef.includes(tipo)
+        ? document.getElementById('f-mmesref').value
+        : null;
 
       if (!nome) return showToast('Digite o nome da meta.','error');
       if (!alvo || isNaN(alvo)) return showToast('Informe o valor alvo.','error');
 
       if (isEdit && m) {
-        Object.assign(m, { nome, tipo, alvo, cor, prazo: prazo === '(Sem prazo)' ? null : prazo, obs });
+        Object.assign(m, { nome, tipo, alvo, cor, prazo: prazo === '(Sem prazo)' ? null : prazo, obs, mesReferencia });
         showToast('Meta atualizada!');
       } else {
         metas.push({ id: nextId++, nome, tipo, alvo, cor,
-          prazo: prazo === '(Sem prazo)' ? null : prazo, obs, ativa: true });
+          prazo: prazo === '(Sem prazo)' ? null : prazo, obs, ativa: true, mesReferencia });
         showToast('Meta criada!');
       }
       sv('rs2_metas', metas);
@@ -4048,6 +4301,7 @@ async function inicializar(){
   aplicarTema();
   migrarDadosAntigos();
   gerarLancamentosRecorrentes();
+  adicionarMesSeNaoExiste(mesAtualDoSistema());
   renderAll();
   wireChartModeBtns();
 
