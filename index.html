@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"/>
@@ -100,12 +100,7 @@
   .nav-item .icon{font-size:15px;width:22px;text-align:center;flex-shrink:0;}
   .nav-item.active .icon{filter:brightness(1.3);}
   .sidebar-footer{padding:16px 20px;border-top:1px solid var(--border);}
-  .meta-mini{background:rgba(139,0,255,0.05);border:1px solid var(--border);border-radius:10px;padding:14px;}
-  .meta-mini-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
-  .meta-mini-value{font-size:13px;color:var(--text2);margin-bottom:8px;}
-  .meta-mini-bar{height:6px;background:var(--bg4);border-radius:6px;overflow:hidden;}
-  .meta-mini-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-light));border-radius:6px;transition:.5s;}
-  #main{margin-left:var(--sidebar-w);flex:1;min-height:100vh;display:flex;flex-direction:column;}
+#main{margin-left:var(--sidebar-w);flex:1;min-height:100vh;display:flex;flex-direction:column;}
   .topbar{height:60px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:50;}
   .topbar-left{display:flex;align-items:center;gap:10px;}
   .status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite;flex-shrink:0;}
@@ -220,11 +215,6 @@
   .page-out{opacity:0!important;transform:translateX(-10px);transition:opacity .15s,transform .15s;}
   .page-in{animation:pageIn .2s ease forwards;}
   @keyframes pageIn{from{opacity:0;transform:translateX(10px);}to{opacity:1;transform:translateX(0);}}
-  .meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px;}
-  .meta-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;}
-  .meta-card-title{font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;}
-  .meta-big{font-size:32px;font-weight:800;color:#fff;}
-  .meta-big span{font-size:16px;color:var(--accent-light);}
   .cliente-row{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border);}
   .cliente-row:last-child{border-bottom:none;}
   .saidas-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;}
@@ -309,18 +299,10 @@
     <div class="nav-item" data-page="fornecedores"><span class="icon">🤝</span> Fornecedores</div>
     <div class="nav-section">Financeiro</div>
     <div class="nav-item" data-page="saidas"><span class="icon">📤</span> Saídas</div>
-    <div class="nav-item" data-page="meta"><span class="icon">🎯</span> Metas</div>
-    <div class="nav-item" data-page="historico"><span class="icon">📈</span> Histórico</div>
+<div class="nav-item" data-page="historico"><span class="icon">📈</span> Histórico</div>
     <div class="nav-section">Sistema</div>
     <div class="nav-item" data-page="config"><span class="icon">⚙️</span> Configurações</div>
   </nav>
-  <div class="sidebar-footer">
-    <div class="meta-mini" title="Progresso da meta principal">
-      <div class="meta-mini-label" id="sm-meta-label">Meta</div>
-      <div class="meta-mini-value" id="sm-meta-val">—</div>
-      <div class="meta-mini-bar"><div class="meta-mini-fill" id="sm-meta-fill" style="width:0%"></div></div>
-    </div>
-  </div>
 </div>
 <div id="sidebar-overlay" onclick="document.getElementById('sidebar').classList.remove('open');this.classList.remove('show')"></div>
 
@@ -424,35 +406,6 @@
       </div>
       <div class="saidas-grid" id="saidas-cats"></div>
       <div id="saidas-tabelas"></div>
-    </div>
-
-    <!-- META -->
-    <div class="page" id="page-meta">
-
-      <!-- Header -->
-      <div class="section-header">
-        <div class="section-title">Metas</div>
-        <button class="btn btn-primary btn-sm" onclick="openModal('meta')">+ Nova meta</button>
-      </div>
-
-      <!-- Cards de metas -->
-      <div id="metas-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:24px"></div>
-
-      <!-- Gráfico de histórico -->
-      <div class="chart-card" style="margin-bottom:24px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <div class="chart-title">Evolução das metas</div>
-          <select id="meta-historico-select" class="form-control" style="width:auto;font-size:12px"
-            onchange="renderMetaHistorico()"></select>
-        </div>
-        <div style="position:relative;height:220px">
-          <canvas id="chart-meta-historico"></canvas>
-        </div>
-      </div>
-
-      <!-- Detalhamento por meta (clientes vinculados) -->
-      <div id="metas-detalhes"></div>
-
     </div>
 
     <!-- CLIENTES -->
@@ -868,150 +821,13 @@ const CORES_FORNECEDOR_DEFAULT = {
   "Assistente":           "#555555"
 };
 
-// ═══════════════════════════════════════════
-// METAS
-// ═══════════════════════════════════════════
-const METAS_SEED = [
-  {
-    id: 1,
-    nome: "Renda Fixa Líquida",
-    tipo: "renda_fixa_liquida",
-    alvo: 4000,
-    cor: "#8B00FF",
-    prazo: null,
-    obs: "Meta de renda recorrente líquida após custos com fornecedores",
-    ativa: true
-  }
-];
-
-const TIPOS_META = {
-
-  renda_fixa_liquida: {
-    label: "Renda Fixa Líquida",
-    desc: "Soma do valor líquido mensal de todos os clientes Fixos ativos (após custos com fornecedores). Configure o 'Valor líquido/mês' em cada cliente.",
-    unidade: "R$",
-    calcular: (metaObj) => {
-      const clientesFixos = clientes.filter(c => clienteEhFixo(c) && c.status === 'Ativo');
-      if(clientesFixos.length === 0) return 0;
-      return clientesFixos.reduce((s, c) => {
-        const val = (c.liquido > 0) ? c.liquido : (c.atual || 0);
-        return s + val;
-      }, 0);
-    }
-  },
-
-  renda_fixa_bruta: {
-    label: "Renda Fixa Bruta",
-    desc: "Soma do valor bruto mensal de todos os clientes Fixos ativos, antes de descontar custos com fornecedores.",
-    unidade: "R$",
-    calcular: (metaObj) => {
-      const clientesFixos = clientes.filter(c => clienteEhFixo(c) && c.status === 'Ativo');
-      return clientesFixos.reduce((s, c) => s + (c.atual || 0), 0);
-    }
-  },
-
-  faturamento_liquido_periodo: {
-    label: "Faturamento Líquido do Mês",
-    desc: "Todas as entradas do mês escolhido (todos os tipos de cliente, incluindo pendentes) menos os custos de projeto do mês.",
-    unidade: "R$",
-    precisaMesReferencia: true,
-    calcular: (metaObj) => {
-      const mes = metaObj && metaObj.mesReferencia;
-      if(!mes) return 0;
-      const totalEntradas = entradas
-        .filter(e => e.mes === mes)
-        .reduce((s, e) => s + (e.val || 0), 0);
-      const totalCustos = saidas
-        .filter(s => s.tipo_saida === 'projeto' && s.mes === mes)
-        .reduce((s, x) => s + (x.val || 0), 0);
-      return totalEntradas - totalCustos;
-    }
-  },
-
-  faturamento_bruto_periodo: {
-    label: "Faturamento Bruto do Mês",
-    desc: "Todas as entradas do mês escolhido (todos os tipos de cliente, incluindo pendentes). Não desconta custos de projeto.",
-    unidade: "R$",
-    precisaMesReferencia: true,
-    calcular: (metaObj) => {
-      const mes = metaObj && metaObj.mesReferencia;
-      if(!mes) return 0;
-      return entradas
-        .filter(e => e.mes === mes)
-        .reduce((s, e) => s + (e.val || 0), 0);
-    }
-  },
-
-  margem_real: {
-    label: "Margem Real Mínima",
-    desc: "Percentual do faturamento que fica após pagar fornecedores, calculado para o mês atual real.",
-    unidade: "%",
-    calcular: (metaObj) => {
-      const mes = mesAtualDoSistema();
-      const receitaMes = entradas
-        .filter(e => e.mes === mes && (!e.status_pgto || e.status_pgto === 'Recebido'))
-        .reduce((s, e) => s + e.val, 0);
-      const custosMes = saidas
-        .filter(s => s.tipo_saida === 'projeto' && s.mes === mes)
-        .reduce((s, x) => s + x.val, 0);
-      if(receitaMes === 0) return 0;
-      return Math.round(((receitaMes - custosMes) / receitaMes) * 100);
-    }
-  },
-
-  meta_crescimento: {
-    label: "Crescimento Mensal",
-    desc: "Percentual de crescimento do faturamento recebido em relação ao mês anterior. Ignora meses futuros.",
-    unidade: "%",
-    calcular: (metaObj) => {
-      const mesAtual = mesAtualDoSistema();
-      const idxAtual = mesParaIndice(mesAtual);
-      const mesesPassados = cfg.meses.filter(m => mesParaIndice(m) <= idxAtual);
-      if(mesesPassados.length < 2) return 0;
-      const mesRef      = mesesPassados[mesesPassados.length - 1];
-      const mesAnterior = mesesPassados[mesesPassados.length - 2];
-      const atual = entradas
-        .filter(e => e.mes === mesRef && (!e.status_pgto || e.status_pgto === 'Recebido'))
-        .reduce((s,e) => s+e.val, 0);
-      const anterior = entradas
-        .filter(e => e.mes === mesAnterior && (!e.status_pgto || e.status_pgto === 'Recebido'))
-        .reduce((s,e) => s+e.val, 0);
-      if(anterior === 0) return 0;
-      return Math.round(((atual - anterior) / anterior) * 100);
-    }
-  },
-
-  faturamento_media_historica: {
-    label: "Média de Faturamento (Histórica)",
-    desc: "Média do faturamento recebido nos últimos 3 meses passados. Útil para acompanhar tendência geral de crescimento.",
-    unidade: "R$",
-    calcular: (metaObj) => {
-      const mesAtual = mesAtualDoSistema();
-      const idxAtual = mesParaIndice(mesAtual);
-      const mesesPassados = cfg.meses
-        .filter(m => mesParaIndice(m) <= idxAtual)
-        .slice(-3);
-      if(mesesPassados.length === 0) return 0;
-      const totais = mesesPassados.map(m =>
-        entradas
-          .filter(e => e.mes === m && (!e.status_pgto || e.status_pgto === 'Recebido'))
-          .reduce((s,e) => s+e.val, 0)
-      );
-      return Math.round(totais.reduce((s,v) => s+v, 0) / totais.length);
-    }
-  }
-
-};
-
 const CONFIG_SEED = {
   nome: "RAFA SILVA",
   sub: "Criador Visual",
   iniciais: "RS",
   logo: null,
   cor: "#8B00FF",
-  meta: 4000,
-  metaTotal: 8000,
-  catsEntrada: ["Cliente Fixo","FOTOP/Esportivo","Evento Social","Variável Avulso","Renda Familiar","Venda Equipamento"],
+catsEntrada: ["Cliente Fixo","FOTOP/Esportivo","Evento Social","Variável Avulso","Renda Familiar","Venda Equipamento"],
   catsSaida: ["Moradia","Comunicação","Softwares","Dívidas","Operacional","Impostos","Equipe","Outros"],
   meses: ["JAN/26","FEV/26","MAR/26","ABR/26","MAI/26","JUN/26","JUL/26"],
   coresEntrada: Object.assign({},CORES_ENTRADA_DEFAULT),
@@ -1053,8 +869,7 @@ async function sv(chave, dados) {
       'rs2_saidas':       'saidas',
       'rs2_clientes':     'clientes',
       'rs2_fornecedores': 'fornecedores',
-      'rs2_metas':             'metas',
-      'rs2_recorrencias':      'recorrencias',
+'rs2_recorrencias':      'recorrencias',
       'rs2_despesas_parc':     'despesasParceladas',
       'rs2_config':            'config'
     };
@@ -1081,7 +896,7 @@ function ld(chave, padrao) {
   }
 }
 
-let entradas, contratos, saidas, clientes, fornecedores, metas, cfg, nextId;
+let entradas, contratos, saidas, clientes, fornecedores, cfg, nextId;
 let recorrencias, despesasParceladas;
 
 // ═══════════════════════════════════════════
@@ -1166,12 +981,6 @@ function migrarDadosAntigos(){
   });
   if(mudouSaidas) sv('rs2_saidas', saidas);
 
-  // Migrar tipo de meta antigo faturamento_mensal → faturamento_media_historica
-  let mudouMetas=false;
-  metas.forEach(m=>{
-    if(m.tipo==='faturamento_mensal'){ m.tipo='faturamento_media_historica'; mudouMetas=true; }
-  });
-  if(mudouMetas) sv('rs2_metas', metas);
 }
 
 // ═══════════════════════════════════════════
@@ -1450,7 +1259,7 @@ function confirmarSeletorMes(){
 // ═══════════════════════════════════════════
 // RENDER DASHBOARD
 // ═══════════════════════════════════════════
-let barChart, doughnutChart, chartMetaHistorico;
+let barChart, doughnutChart;
 let dashboardPeriod = '';
 let chartBarMode = 'stacked'; // 'stacked' | 'grouped' | 'categoria'
 function setDashboardPeriod(m){ dashboardPeriod=m; renderDashboard(); }
@@ -1654,54 +1463,12 @@ function renderDashboard(){
   const margemReal = totalAcum - totalCustoProjeto;
   const pctMargem  = totalAcum>0 ? Math.round(margemReal/totalAcum*100) : 0;
 
-  const metasAtivas = metas.filter(m=>m.ativa!==false);
-  const primeiraMeta = metasAtivas[0];
-  if(primeiraMeta && TIPOS_META[primeiraMeta.tipo]){
-    const tipoPM = TIPOS_META[primeiraMeta.tipo];
-    const atualPM = tipoPM.calcular(primeiraMeta);
-    const pctPM = primeiraMeta.alvo>0 ? Math.min(Math.round(atualPM/primeiraMeta.alvo*100),100) : 0;
-    document.getElementById('sm-meta-label').textContent = primeiraMeta.nome;
-    document.getElementById('sm-meta-val').textContent = `${tipoPM.unidade==='%'?atualPM+'%':R(atualPM)} / ${tipoPM.unidade==='%'?primeiraMeta.alvo+'%':R(primeiraMeta.alvo)}`;
-    document.getElementById('sm-meta-fill').style.width = pctPM+'%';
-  } else {
-    document.getElementById('sm-meta-label').textContent = 'Metas';
-    document.getElementById('sm-meta-val').textContent = '—';
-    document.getElementById('sm-meta-fill').style.width = '0%';
-  }
-
-  const miniMetas = metasAtivas.slice(0,2).map(m=>{
-    const tipo = TIPOS_META[m.tipo];
-    if(!tipo) return '';
-    const atual = tipo.calcular(m);
-    const pctM = m.alvo>0 ? Math.min(Math.round(atual/m.alvo*100),100) : 0;
-    const cor = m.cor||'#8B00FF';
-    return `
-      <div style="margin-bottom:8px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <span style="font-size:11px;color:#888">${m.nome}</span>
-          <span style="font-size:11px;font-weight:700;color:#fff">${pctM}%</span>
-        </div>
-        <div style="background:rgba(255,255,255,0.06);border-radius:100px;height:5px">
-          <div style="height:100%;border-radius:100px;width:${pctM}%;background:${cor}"></div>
-        </div>
-        <div style="font-size:10px;color:#555;margin-top:2px">
-          ${tipo.unidade==='%'?atual+'%':R(atual)} de ${tipo.unidade==='%'?m.alvo+'%':R(m.alvo)}
-        </div>
-      </div>`;
-  }).join('');
-
   document.getElementById('cards-grid').innerHTML = `
     <div class="card hero" style="animation-delay:0ms">
       <div class="card-dot"></div>
       <div class="card-label">Total Faturado 2026</div>
       <div class="card-value">${R(totalAcum)}</div>
       <div class="card-sub">${meses.length} ${meses.length===1?'mês':'meses'} · Média ${R(meses.length?Math.round(totalAcum/meses.length):0)}/mês</div>
-    </div>
-    <div class="card" style="animation-delay:60ms;cursor:pointer" onclick="goPage('meta')" title="Ver todas as metas">
-      <div class="card-dot"></div>
-      <div class="card-label">Metas</div>
-      ${miniMetas || '<div style="font-size:12px;color:#444">Nenhuma meta cadastrada</div>'}
-      <div style="font-size:10px;color:#555;margin-top:8px">Clique para ver detalhes →</div>
     </div>
     <div class="card yellow" style="animation-delay:120ms">
       <div class="card-dot"></div>
@@ -2385,326 +2152,6 @@ function atualizarPreviewParcelasDespesa(){
 }
 
 // ═══════════════════════════════════════════
-// RENDER META
-// ═══════════════════════════════════════════
-function renderMeta(){
-  renderMetaCards();
-  renderMetaHistoricoSelect();
-  renderMetaHistorico();
-  renderMetaDetalhes();
-}
-
-function renderMetaCards(){
-  document.getElementById('metas-grid').innerHTML = metas
-    .filter(m => m.ativa !== false)
-    .map(m => {
-      const tipo = TIPOS_META[m.tipo];
-      if (!tipo) return '';
-
-      const atual   = tipo.calcular(m);
-      const alvo    = m.alvo;
-      const pct     = alvo > 0 ? Math.min(Math.round(atual / alvo * 100), 100) : 0;
-      const falta   = Math.max(alvo - atual, 0);
-      const cor     = m.cor || '#8B00FF';
-      const unidade = tipo.unidade;
-
-      let estadoIcon, estadoLabel, estadoCor;
-      if (pct >= 100)      { estadoIcon='✅'; estadoLabel='Atingida';   estadoCor='#00C864'; }
-      else if (pct >= 70)  { estadoIcon='🟢'; estadoLabel='No caminho'; estadoCor='#00C864'; }
-      else if (pct >= 40)  { estadoIcon='🟡'; estadoLabel='Atenção';    estadoCor='#FFB800'; }
-      else                 { estadoIcon='🔴'; estadoLabel='Crítico';    estadoCor='#FF4466'; }
-
-      let prazoHtml = '';
-      if (m.prazo) {
-        const mesAtualStr = mesAtualDoSistema();
-        const mesesRestantes = mesParaIndice(m.prazo) - mesParaIndice(mesAtualStr);
-        prazoHtml = `<div style="font-size:11px;color:#555;margin-top:4px">
-          ⏱ Prazo: ${m.prazo} — ${mesesRestantes > 0 ? mesesRestantes + ' meses restantes' : mesesRestantes === 0 ? 'Este mês!' : 'Prazo encerrado'}
-        </div>`;
-      }
-
-      const avisoZero = atual === 0 ? `
-        <div style="font-size:10px;color:#555;margin-top:6px;padding:6px 8px;
-          background:rgba(255,255,255,0.03);border-radius:6px">
-          ℹ️ ${
-            m.tipo === 'renda_fixa_liquida'
-              ? 'Configure o "Valor líquido/mês" nos clientes Fixos ativos'
-              : (m.tipo === 'faturamento_liquido_periodo' || m.tipo === 'faturamento_bruto_periodo')
-              ? `Nenhuma entrada encontrada em ${m.mesReferencia || 'mês não definido'}`
-              : 'Sem dados suficientes para calcular'
-          }
-        </div>` : '';
-
-      let simuladorHtml = '';
-      if (m.tipo === 'faturamento_liquido_periodo' || m.tipo === 'faturamento_bruto_periodo') {
-        const mes = m.mesReferencia;
-        const rec = mes ? entradas.filter(e=>e.mes===mes&&(!e.status_pgto||e.status_pgto==='Recebido')).reduce((s,e)=>s+(e.val||0),0) : 0;
-        const pen = mes ? entradas.filter(e=>e.mes===mes&&e.status_pgto==='Pendente').reduce((s,e)=>s+(e.val||0),0) : 0;
-        simuladorHtml = `
-          <div style="margin-top:12px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.06);display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-            <span style="font-size:12px;color:var(--green)">✓ Recebido: ${R(rec)}</span>
-            <span style="color:#333">·</span>
-            <span style="font-size:12px;color:var(--yellow,#f5a623)">⏳ Pendente: ${R(pen)}</span>
-          </div>`;
-      } else if (m.tipo === 'renda_fixa_liquida' && pct < 100) {
-        simuladorHtml = `
-          <div style="margin-top:12px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.06)">
-            <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Simulador</div>
-            <div style="font-size:12px;color:#888">
-              Um novo cliente fixo de <input type="number" id="sim-val-${m.id}"
-                style="width:70px;background:transparent;border:none;border-bottom:1px solid #333;color:#fff;font-size:12px;text-align:center"
-                placeholder="R$" oninput="simularMeta(${m.id}, ${atual}, ${alvo})"/>
-              líquido/mês levaria você a
-              <span id="sim-resultado-${m.id}" style="color:${cor};font-weight:700">—</span>
-            </div>
-          </div>`;
-      }
-
-      return `
-        <div style="background:var(--bg2);border:1px solid rgba(255,255,255,0.06);border-radius:14px;
-          padding:22px;border-top:3px solid ${cor};position:relative">
-
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
-            <div>
-              <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">
-                ${tipo.label}
-              </div>
-              <div style="font-size:16px;font-weight:700;color:#fff">${m.nome}</div>
-              ${m.mesReferencia ? `<div style="font-size:10px;color:#555;margin-top:2px">📅 Referente a ${m.mesReferencia}</div>` : ''}
-              ${m.obs ? `<div style="font-size:11px;color:#444;margin-top:2px">${m.obs}</div>` : ''}
-            </div>
-            <div style="display:flex;gap:6px">
-              <button class="btn btn-ghost btn-sm" onclick="editMeta(${m.id})" title="Editar">✎</button>
-              <button class="btn btn-danger btn-sm" onclick="askDelete(this,()=>delMeta(${m.id}))" title="Remover">✕</button>
-            </div>
-          </div>
-
-          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px">
-            <div style="font-size:32px;font-weight:900;color:#fff">
-              ${unidade === '%' ? atual + '%' : R(atual)}
-            </div>
-            <div style="font-size:14px;color:#555">
-              de ${unidade === '%' ? alvo + '%' : R(alvo)}
-            </div>
-          </div>
-
-          <div style="background:rgba(255,255,255,0.06);border-radius:100px;height:8px;margin-bottom:8px;overflow:hidden">
-            <div style="height:100%;border-radius:100px;width:${pct}%;
-              background:linear-gradient(90deg,${cor},${cor}99);transition:.5s"></div>
-          </div>
-
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:12px;color:${estadoCor};font-weight:600">
-              ${estadoIcon} ${estadoLabel}
-            </div>
-            <div style="font-size:12px;color:#666">
-              ${pct}% · ${pct < 100 ? 'faltam ' + (unidade === '%' ? (alvo-atual)+'%' : R(falta)) : 'meta atingida!'}
-            </div>
-          </div>
-
-          ${prazoHtml}
-          ${simuladorHtml}
-          ${avisoZero}
-        </div>`;
-    }).join('') ||
-    `<div class="empty" style="grid-column:1/-1">
-      <div class="empty-icon">🎯</div>
-      Nenhuma meta cadastrada. Crie sua primeira meta!
-    </div>`;
-}
-
-function simularMeta(metaId, atual, alvo){
-  const input = document.getElementById(`sim-val-${metaId}`);
-  const result = document.getElementById(`sim-resultado-${metaId}`);
-  const val = parseFloat(input.value) || 0;
-  if (!val) { result.textContent = '—'; return; }
-  const novoTotal = atual + val;
-  const novoPct = Math.min(Math.round(novoTotal / alvo * 100), 100);
-  result.textContent = `${R(novoTotal)} (${novoPct}% da meta)`;
-}
-
-function renderMetaHistoricoSelect(){
-  const sel = document.getElementById('meta-historico-select');
-  if (!sel) return;
-  const cur = sel.value;
-  sel.innerHTML = metas.filter(m => m.ativa !== false).map(m =>
-    `<option value="${m.id}">${m.nome}</option>`
-  ).join('');
-  if(cur) sel.value = cur;
-}
-
-function renderMetaHistorico(){
-  const sel = document.getElementById('meta-historico-select');
-  if (!sel) return;
-  const metaId = parseInt(sel.value);
-  const m = metas.find(x => x.id === metaId);
-  if (!m) return;
-
-  const tipo = TIPOS_META[m.tipo];
-  if (!tipo) return;
-
-  const ctx = document.getElementById('chart-meta-historico');
-  if (!ctx) return;
-  if (chartMetaHistorico) chartMetaHistorico.destroy();
-
-  const labels = cfg.meses;
-  const dadosMes = labels.map(() => tipo.calcular(m));
-
-  const cor = m.cor || '#8B00FF';
-
-  chartMetaHistorico = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: m.nome,
-          data: dadosMes,
-          borderColor: cor,
-          backgroundColor: cor + '15',
-          fill: true,
-          tension: 0.4,
-          pointBackgroundColor: cor,
-          pointRadius: 4,
-          borderWidth: 2
-        },
-        {
-          label: 'Meta: ' + (tipo.unidade === '%' ? m.alvo + '%' : R(m.alvo)),
-          data: labels.map(() => m.alvo),
-          borderColor: '#444',
-          borderDash: [6, 3],
-          borderWidth: 1.5,
-          pointRadius: 0,
-          fill: false,
-          tension: 0
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { labels: { color: '#666', font: { size: 11 }, boxWidth: 12 } },
-        tooltip: {
-          callbacks: {
-            label: c => ` ${c.dataset.label}: ${tipo.unidade === '%' ? c.raw + '%' : R(c.raw)}`
-          }
-        }
-      },
-      scales: {
-        x: { ticks: { color: '#555', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
-        y: {
-          ticks: {
-            color: '#555',
-            font: { size: 11 },
-            callback: v => tipo.unidade === '%' ? v + '%' : 'R$' + Math.round(v/1000) + 'k'
-          },
-          grid: { color: 'rgba(255,255,255,0.06)' }
-        }
-      }
-    }
-  });
-}
-
-function renderMetaDetalhes(){
-  const container = document.getElementById('metas-detalhes');
-  if (!container) return;
-
-  const metasAtivas = metas.filter(m => m.ativa !== false);
-
-  container.innerHTML = metasAtivas.map(m => {
-    if (m.tipo !== 'renda_fixa_liquida' && m.tipo !== 'renda_fixa_bruta') return '';
-
-    const isLiquida = m.tipo === 'renda_fixa_liquida';
-    const cor = m.cor || '#8B00FF';
-
-    const clientesFixos = clientes
-      .filter(c => clienteEhFixo(c) && c.status === 'Ativo')
-      .sort((a, b) => {
-        const vA = isLiquida ? (a.liquido > 0 ? a.liquido : a.atual||0) : (a.atual||0);
-        const vB = isLiquida ? (b.liquido > 0 ? b.liquido : b.atual||0) : (b.atual||0);
-        return vB - vA;
-      });
-
-    const total = clientesFixos.reduce((s, c) => {
-      return s + (isLiquida ? (c.liquido > 0 ? c.liquido : c.atual||0) : (c.atual||0));
-    }, 0);
-
-    const clientesPotenciais = clientes
-      .filter(c => (c.tipos||[]).includes('Potencial') || c.status === 'Potencial');
-
-    return `
-      <div style="background:var(--bg2);border:1px solid rgba(255,255,255,0.06);
-        border-radius:14px;padding:22px;margin-bottom:16px">
-
-        <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:16px">
-          🎯 ${m.nome} — Composição atual
-        </div>
-
-        <div style="margin-bottom:16px">
-          <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
-            Clientes fixos ativos
-          </div>
-          ${clientesFixos.map(c => {
-            const val = isLiquida ? (c.liquido > 0 ? c.liquido : c.atual||0) : (c.atual||0);
-            const pctCliente = total > 0 ? Math.round(val / m.alvo * 100) : 0;
-            return `
-              <div style="display:flex;align-items:center;gap:12px;padding:10px 0;
-                border-bottom:1px solid rgba(255,255,255,0.04)">
-                <div style="flex:1">
-                  <div style="font-size:13px;font-weight:600;color:#fff">${c.nome}</div>
-                  ${isLiquida && c.liquido > 0 && c.atual !== c.liquido ?
-                    `<div style="font-size:11px;color:#555">Bruto: ${R(c.atual)} → Líquido: ${R(c.liquido)}</div>` :
-                    ''}
-                </div>
-                <div style="text-align:right">
-                  <div style="font-size:14px;font-weight:700;color:#fff">${R(val)}</div>
-                  <div style="font-size:10px;color:#555">${pctCliente}% da meta</div>
-                </div>
-                <div style="width:80px;background:rgba(255,255,255,0.06);border-radius:100px;height:4px">
-                  <div style="height:100%;border-radius:100px;width:${Math.min(pctCliente,100)}%;background:${cor}"></div>
-                </div>
-              </div>`;
-          }).join('') || '<div style="font-size:12px;color:#444">Nenhum cliente fixo ativo cadastrado</div>'}
-        </div>
-
-        ${clientesPotenciais.length > 0 ? `
-          <div>
-            <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
-              Potenciais (não contam ainda)
-            </div>
-            ${clientesPotenciais.map(c => {
-              const val = isLiquida ? (c.liquido > 0 ? c.liquido : c.meta||0) : (c.meta||0);
-              return `
-                <div style="display:flex;justify-content:space-between;padding:8px 0;
-                  border-bottom:1px solid rgba(255,255,255,0.04);opacity:0.5">
-                  <span style="font-size:12px;color:#888">${c.nome}</span>
-                  <span style="font-size:12px;color:#666">${val > 0 ? R(val) + '/mês estimado' : 'valor não definido'}</span>
-                </div>`;
-            }).join('')}
-          </div>` : ''}
-      </div>`;
-  }).join('');
-}
-
-function atualizarDescTipoMeta(){
-  const sel  = document.getElementById('f-mtipo');
-  const desc = document.getElementById('desc-tipo-meta');
-  const campoMes = document.getElementById('campo-mes-referencia');
-  if(!sel || !desc) return;
-  const tipo = TIPOS_META[sel.value];
-  desc.textContent = tipo ? tipo.desc : '';
-  if(campoMes){
-    campoMes.style.display = (tipo && tipo.precisaMesReferencia) ? 'block' : 'none';
-  }
-}
-
-function editMeta(id){ openModal._editId = id; openModal('meta-edit'); }
-function delMeta(id){
-  metas = metas.filter(m => m.id !== id);
-  sv('rs2_metas', metas);
-  renderAll();
-}
 function delCliente(id){clientes=clientes.filter(c=>c.id!==id);sv('rs2_clientes',clientes);renderAll();showToast('Cliente removido.','info');}
 
 // ═══════════════════════════════════════════
@@ -3505,7 +2952,7 @@ function exportarExcel(){
 // BACKUP / RESTORE JSON
 // ═══════════════════════════════════════════
 function exportarJSON(){
-  const data=JSON.stringify({entradas,contratos,saidas,clientes,fornecedores,metas,recorrencias,despesasParceladas,cfg},null,2);
+  const data=JSON.stringify({entradas,contratos,saidas,clientes,fornecedores,recorrencias,despesasParceladas,cfg},null,2);
   const a=document.createElement('a');
   a.href='data:application/json;charset=utf-8,'+encodeURIComponent(data);
   a.download=`backup_financeiro_${new Date().toISOString().slice(0,10)}.json`;
@@ -3524,8 +2971,7 @@ function processarImportJSON(input){
       if(d.saidas) saidas=d.saidas,sv('rs2_saidas',saidas);
       if(d.clientes) clientes=d.clientes,sv('rs2_clientes',clientes);
       if(d.fornecedores) fornecedores=d.fornecedores, sv('rs2_fornecedores', fornecedores);
-      if(d.metas) metas=d.metas, sv('rs2_metas', metas);
-      if(d.recorrencias) recorrencias=d.recorrencias, sv('rs2_recorrencias', recorrencias);
+if(d.recorrencias) recorrencias=d.recorrencias, sv('rs2_recorrencias', recorrencias);
       if(d.despesasParceladas) despesasParceladas=d.despesasParceladas, sv('rs2_despesas_parc', despesasParceladas);
       if(d.cfg) cfg=Object.assign({},CONFIG_SEED,d.cfg),sv('rs2_config',cfg);
       aplicarTema();renderAll();showToast('Backup restaurado com sucesso!');
@@ -3537,8 +2983,8 @@ function processarImportJSON(input){
 function resetarDados(){
   if(!confirm('⚠ ATENÇÃO: Isso apaga TODOS os lançamentos, contratos e saídas. Tem certeza?'))return;
   if(!confirm('Segunda confirmação: deseja mesmo resetar tudo?'))return;
-  entradas=ENTRADAS_SEED;contratos=CONTRATOS_SEED;saidas=SAIDAS_SEED;clientes=CLIENTES_SEED;fornecedores=FORNECEDORES_SEED;metas=METAS_SEED;recorrencias=RECORRENCIAS_SEED;despesasParceladas=[];
-  sv('rs2_entradas',entradas);sv('rs2_contratos',contratos);sv('rs2_saidas',saidas);sv('rs2_clientes',clientes);sv('rs2_fornecedores',fornecedores);sv('rs2_metas',metas);sv('rs2_recorrencias',recorrencias);sv('rs2_despesas_parc',despesasParceladas);
+  entradas=ENTRADAS_SEED;contratos=CONTRATOS_SEED;saidas=SAIDAS_SEED;clientes=CLIENTES_SEED;fornecedores=FORNECEDORES_SEED;recorrencias=RECORRENCIAS_SEED;despesasParceladas=[];
+  sv('rs2_entradas',entradas);sv('rs2_contratos',contratos);sv('rs2_saidas',saidas);sv('rs2_clientes',clientes);sv('rs2_fornecedores',fornecedores);sv('rs2_recorrencias',recorrencias);sv('rs2_despesas_parc',despesasParceladas);
   renderAll();showToast('Dados resetados para o estado inicial.','info');
 }
 
@@ -4070,93 +3516,6 @@ function openModal(type){
       showToast('Custo de projeto registrado!');
     };
   }
-  else if (type === 'meta' || type === 'meta-edit') {
-    const isEdit = type === 'meta-edit';
-    const m = isEdit ? metas.find(x => x.id === openModal._editId) : null;
-    title.textContent = isEdit ? '✎ Editar Meta' : '🎯 Nova Meta';
-
-    const tiposOpts = Object.entries(TIPOS_META).map(([key, t]) =>
-      `<option value="${key}" ${m && m.tipo === key ? 'selected' : ''}>${t.label}</option>`
-    ).join('');
-
-    const mesesOpts = ['(Sem prazo)', ...cfg.meses].map(mes =>
-      `<option ${m && m.prazo === mes ? 'selected' : ''}>${mes}</option>`
-    ).join('');
-
-    body.innerHTML = `
-      <div class="form-group">
-        <label class="form-label">Nome da meta</label>
-        <input class="form-control" type="text" id="f-mnome"
-          value="${m ? m.nome : ''}" placeholder="Ex: Renda Fixa Líquida"/>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Tipo de cálculo</label>
-          <select class="form-control" id="f-mtipo" onchange="atualizarDescTipoMeta()">${tiposOpts}</select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Valor alvo</label>
-          <input class="form-control" type="number" id="f-malvo"
-            value="${m ? m.alvo : ''}" placeholder="Ex: 4000"/>
-        </div>
-      </div>
-      <div id="desc-tipo-meta" style="font-size:11px;color:#555;margin:-8px 0 12px;padding:8px 12px;
-        background:rgba(139,0,255,0.05);border-radius:8px;border-left:2px solid var(--accent)"></div>
-      <div class="form-group" id="campo-mes-referencia" style="display:none">
-        <label class="form-label">Mês de referência</label>
-        <select class="form-control" id="f-mmesref">
-          ${cfg.meses.map(mm => `<option ${(m&&m.mesReferencia?m.mesReferencia===mm:mm===mesAtualDoSistema()) ? 'selected' : ''}>${mm}</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Cor</label>
-          <input type="color" class="form-control" id="f-mcor"
-            value="${m ? m.cor : '#8B00FF'}"
-            style="height:42px;padding:4px;cursor:pointer"/>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Prazo (opcional)</label>
-          <select class="form-control" id="f-mprazo">${mesesOpts}</select>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Observação (opcional)</label>
-        <input class="form-control" type="text" id="f-mobs"
-          value="${m ? m.obs||'' : ''}"
-          placeholder="Ex: Foco em prospectar 2 clientes novos até dezembro"/>
-      </div>`;
-
-    atualizarDescTipoMeta();
-
-    confirm.onclick = () => {
-      const nome  = document.getElementById('f-mnome').value.trim();
-      const tipo  = document.getElementById('f-mtipo').value;
-      const alvo  = parseFloat(document.getElementById('f-malvo').value);
-      const cor   = document.getElementById('f-mcor').value;
-      const prazo = document.getElementById('f-mprazo').value;
-      const obs   = document.getElementById('f-mobs').value.trim();
-      const precisaMesRef = ['faturamento_liquido_periodo','faturamento_bruto_periodo'];
-      const mesReferencia = precisaMesRef.includes(tipo)
-        ? document.getElementById('f-mmesref').value
-        : null;
-
-      if (!nome) return showToast('Digite o nome da meta.','error');
-      if (!alvo || isNaN(alvo)) return showToast('Informe o valor alvo.','error');
-
-      if (isEdit && m) {
-        Object.assign(m, { nome, tipo, alvo, cor, prazo: prazo === '(Sem prazo)' ? null : prazo, obs, mesReferencia });
-        showToast('Meta atualizada!');
-      } else {
-        metas.push({ id: nextId++, nome, tipo, alvo, cor,
-          prazo: prazo === '(Sem prazo)' ? null : prazo, obs, ativa: true, mesReferencia });
-        showToast('Meta criada!');
-      }
-      sv('rs2_metas', metas);
-      closeModal();
-      renderAll();
-    };
-  }
 
   document.getElementById('modal-overlay').classList.add('open');
 }
@@ -4166,7 +3525,7 @@ function closeModal(){document.getElementById('modal-overlay').classList.remove(
 // ═══════════════════════════════════════════
 // NAVEGAÇÃO
 // ═══════════════════════════════════════════
-const PAGE_TITLES={dashboard:'Dashboard',entradas:'Entradas',contratos:'Contratos & Parcelas',saidas:'Saídas',meta:'Metas',clientes:'Clientes',fornecedores:'Fornecedores',historico:'Histórico',config:'Configurações'};
+const PAGE_TITLES={dashboard:'Dashboard',entradas:'Entradas',contratos:'Contratos & Parcelas',saidas:'Saídas',clientes:'Clientes',fornecedores:'Fornecedores',historico:'Histórico',config:'Configurações'};
 
 function goPage(page){
   const current=document.querySelector('.page.active');
@@ -4217,7 +3576,6 @@ function renderAll(){
   renderEntradas();
   renderContratos();
   renderSaidas();
-  renderMeta();
   renderClientes();
   renderFornecedores();
   renderHistorico();
@@ -4269,8 +3627,7 @@ async function inicializar(){
         if (dados.saidas)    { _cache['rs2_saidas']    = dados.saidas;    }
         if (dados.clientes)  { _cache['rs2_clientes']  = dados.clientes;  }
         if (dados.fornecedores) { _cache['rs2_fornecedores'] = dados.fornecedores; }
-        if (dados.metas)              { _cache['rs2_metas']         = dados.metas;              }
-        if (dados.recorrencias)       { _cache['rs2_recorrencias']  = dados.recorrencias;       }
+if (dados.recorrencias)       { _cache['rs2_recorrencias']  = dados.recorrencias;       }
         if (dados.despesasParceladas) { _cache['rs2_despesas_parc'] = dados.despesasParceladas; }
         if (dados.config)             { _cache['rs2_config']        = dados.config;             }
       }
@@ -4285,8 +3642,7 @@ async function inicializar(){
   saidas       = ld('rs2_saidas',       SAIDAS_SEED);
   clientes     = ld('rs2_clientes',     CLIENTES_SEED);
   fornecedores = ld('rs2_fornecedores', FORNECEDORES_SEED);
-  metas           = ld('rs2_metas',         METAS_SEED);
-  recorrencias    = ld('rs2_recorrencias',  RECORRENCIAS_SEED);
+recorrencias    = ld('rs2_recorrencias',  RECORRENCIAS_SEED);
   despesasParceladas = ld('rs2_despesas_parc', []);
   cfg       = ld('rs2_config',    CONFIG_SEED);
   cfg       = Object.assign({}, CONFIG_SEED, cfg);
@@ -4304,7 +3660,6 @@ async function inicializar(){
     ...saidas.map(s => s.id),
     ...clientes.map(c => c.id),
     ...fornecedores.map(f => f.id),
-    ...metas.map(m => m.id),
     ...(recorrencias||[]).map(r => r.id),
     ...(despesasParceladas||[]).map(d => d.id)
   ) + 1;
