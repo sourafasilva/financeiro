@@ -912,8 +912,9 @@ const TIPOS_META = {
 
   faturamento_liquido_periodo: {
     label: "Faturamento Líquido do Mês",
-    desc: "Soma de TODAS as entradas do mês escolhido (fixos, avulsos, eventos, contratos — todos os tipos), incluindo pendentes. Subtrai custos de fornecedores daquele mês.",
+    desc: "Todas as entradas do mês escolhido (todos os tipos de cliente, incluindo pendentes) menos os custos de projeto do mês.",
     unidade: "R$",
+    precisaMesReferencia: true,
     calcular: (metaObj) => {
       const mes = metaObj && metaObj.mesReferencia;
       if(!mes) return 0;
@@ -929,8 +930,9 @@ const TIPOS_META = {
 
   faturamento_bruto_periodo: {
     label: "Faturamento Bruto do Mês",
-    desc: "Soma de TODAS as entradas do mês escolhido (todos os tipos de cliente), incluindo pendentes. Não desconta custos de fornecedores.",
+    desc: "Todas as entradas do mês escolhido (todos os tipos de cliente, incluindo pendentes). Não desconta custos de projeto.",
     unidade: "R$",
+    precisaMesReferencia: true,
     calcular: (metaObj) => {
       const mes = metaObj && metaObj.mesReferencia;
       if(!mes) return 0;
@@ -2434,7 +2436,17 @@ function renderMetaCards(){
         </div>` : '';
 
       let simuladorHtml = '';
-      if (m.tipo === 'renda_fixa_liquida' && pct < 100) {
+      if (m.tipo === 'faturamento_liquido_periodo' || m.tipo === 'faturamento_bruto_periodo') {
+        const mes = m.mesReferencia;
+        const rec = mes ? entradas.filter(e=>e.mes===mes&&(!e.status_pgto||e.status_pgto==='Recebido')).reduce((s,e)=>s+(e.val||0),0) : 0;
+        const pen = mes ? entradas.filter(e=>e.mes===mes&&e.status_pgto==='Pendente').reduce((s,e)=>s+(e.val||0),0) : 0;
+        simuladorHtml = `
+          <div style="margin-top:12px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.06);display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:12px;color:var(--green)">✓ Recebido: ${R(rec)}</span>
+            <span style="color:#333">·</span>
+            <span style="font-size:12px;color:var(--yellow,#f5a623)">⏳ Pendente: ${R(pen)}</span>
+          </div>`;
+      } else if (m.tipo === 'renda_fixa_liquida' && pct < 100) {
         simuladorHtml = `
           <div style="margin-top:12px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.06)">
             <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Simulador</div>
@@ -2683,8 +2695,7 @@ function atualizarDescTipoMeta(){
   const tipo = TIPOS_META[sel.value];
   desc.textContent = tipo ? tipo.desc : '';
   if(campoMes){
-    const precisaMes = ['faturamento_liquido_periodo','faturamento_bruto_periodo'];
-    campoMes.style.display = precisaMes.includes(sel.value) ? 'block' : 'none';
+    campoMes.style.display = (tipo && tipo.precisaMesReferencia) ? 'block' : 'none';
   }
 }
 
